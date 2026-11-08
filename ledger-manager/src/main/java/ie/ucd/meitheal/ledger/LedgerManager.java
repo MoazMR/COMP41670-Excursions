@@ -32,15 +32,19 @@ public final class LedgerManager {
         AccountReference creditor = AccountReference.member(memberId);
         ensureWelcomeGrantDoesNotExist(creditor);
 
-        Transaction transaction = new Transaction(
+        Transaction transaction = createWelcomeGrantTransaction(creditor);
+        append(transaction);
+        return transaction;
+    }
+
+    private Transaction createWelcomeGrantTransaction(AccountReference creditor) {
+        return new Transaction(
                 Objects.requireNonNull(transactionIdGenerator.get(), "generated transaction ID"),
                 AccountReference.SYSTEM,
                 creditor,
                 WELCOME_GRANT_AMOUNT,
                 TransactionType.WELCOME_GRANT,
                 Objects.requireNonNull(dateGenerator.get(), "generated date"));
-        append(transaction);
-        return transaction;
     }
 
     private void ensureWelcomeGrantDoesNotExist(AccountReference creditor) {
