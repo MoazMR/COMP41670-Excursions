@@ -43,7 +43,13 @@ class CommandParserCharacterisationTest {
                 Arguments.of("escaped double quote", "cmd \"a\\\"b\"", "cmd", List.of("a\"b")),
                 Arguments.of("escaped backslash", "cmd \"a\\\\b\"", "cmd", List.of("a\\b")),
                 Arguments.of("trailing whitespace after quoted argument", "cmd \"value\"   ",
-                        "cmd", List.of("value")));
+                        "cmd", List.of("value")),
+                Arguments.of("adversarial case 1", "run", "run", List.of()),
+                Arguments.of("adversarial case 2", "run \"a b\"", "run", List.of("a b")),
+                Arguments.of("adversarial case 3", "run \"a\\\"b\"", "run", List.of("a\"b")),
+                Arguments.of("adversarial case 4", "run \"a\\\\b\"", "run", List.of("a\\b")),
+                Arguments.of("adversarial case 10", "run \"a\\\\\\\"\"tail",
+                        "run", List.of("a\\\"tail")));
     }
 
     @ParameterizedTest(name = "{0}")
@@ -66,7 +72,17 @@ class CommandParserCharacterisationTest {
                 Arguments.of("dangling escape", "cmd \"a\\",
                         "Invalid command syntax: dangling escape in quoted argument."),
                 Arguments.of("unmatched double quote", "cmd \"a",
-                        "Invalid command syntax: unmatched double quote."));
+                        "Invalid command syntax: unmatched double quote."),
+                Arguments.of("adversarial case 5", "run \"abc\\",
+                        "Invalid command syntax: dangling escape in quoted argument."),
+                Arguments.of("adversarial case 6", "run \"a\\q\"",
+                        "Invalid command syntax: invalid escape '\\q' in quoted argument."),
+                Arguments.of("adversarial case 7", "run \"a\\\"",
+                        "Invalid command syntax: unmatched double quote."),
+                Arguments.of("adversarial case 8", "run \"a\\\\",
+                        "Invalid command syntax: unmatched double quote."),
+                Arguments.of("adversarial case 9", "run \"a\\q",
+                        "Invalid command syntax: invalid escape '\\q' in quoted argument."));
     }
 
     @Test

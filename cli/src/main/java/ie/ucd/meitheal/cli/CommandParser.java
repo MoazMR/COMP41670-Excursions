@@ -20,13 +20,7 @@ public final class CommandParser {
                 if (current == '"') {
                     inQuotes = false;
                 } else if (current == '\\') {
-                    if (index + 1 >= line.length()) {
-                        throw syntaxError("dangling escape in quoted argument");
-                    }
-                    char escaped = line.charAt(++index);
-                    if (escaped != '"' && escaped != '\\') {
-                        throw syntaxError("invalid escape '\\" + escaped + "' in quoted argument");
-                    }
+                    char escaped = decodeQuotedEscape(line, ++index);
                     token.append(escaped);
                 } else {
                     token.append(current);
@@ -58,6 +52,17 @@ public final class CommandParser {
         }
 
         return new ParsedCommand(tokens.get(0), tokens.subList(1, tokens.size()));
+    }
+
+    private char decodeQuotedEscape(String line, int escapedCharacterIndex) {
+        if (escapedCharacterIndex >= line.length()) {
+            throw syntaxError("dangling escape in quoted argument");
+        }
+        char escaped = line.charAt(escapedCharacterIndex);
+        if (escaped != '"' && escaped != '\\') {
+            throw syntaxError("invalid escape '\\" + escaped + "' in quoted argument");
+        }
+        return escaped;
     }
 
     private IllegalArgumentException syntaxError(String detail) {
