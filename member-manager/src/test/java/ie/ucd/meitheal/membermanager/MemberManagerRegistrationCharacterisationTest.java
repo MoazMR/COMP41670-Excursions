@@ -77,4 +77,14 @@ class MemberManagerRegistrationCharacterisationTest {
         assertTrue(members.getMembers().isEmpty());
         assertSame(prepared.member(), members.commitRegistration(prepared));
     }
+
+    @Test
+    void invalidNameTakesPrecedenceOverInvalidEmailWithoutChangingState() {
+        var exception = assertThrows(MemberManagerException.class,
+                () -> members.prepareRegistration("   ", "not-an-email"));
+
+        assertEquals(MemberManagerException.Code.INVALID_NAME, exception.code());
+        assertEquals("Member name must not be blank", exception.getMessage());
+        assertTrue(members.getMembers().isEmpty());
+    }
 }
