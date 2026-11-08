@@ -1,7 +1,9 @@
 # GitHub Copilot transcript - MemberManager implementation
 
-Date: 8 November 2026  
-Tool: GitHub Copilot Chat (Agent mode) in Visual Studio Code  
+Date: 8 November 2026
+
+Tool: GitHub Copilot Chat (Agent mode) in Visual Studio Code
+
 Branch: `feature/moaz-member-manager`
 
 ## Prompt
@@ -25,4 +27,3 @@ Verification after modification: `gradlew.bat :member-manager:test test` complet
 ## Unresolved integration dependency
 
 The shared ID/result/error interfaces and ledger transaction boundary do not yet exist. The module therefore keeps a local typed `MemberId` and stages registration without minting credits. Joe's service integration and Benjamin's ledger work must later coordinate the single 120-credit welcome grant atomically and replace or adapt the temporary local contract without duplicating member state.
-
