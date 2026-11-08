@@ -1,307 +1,164 @@
-# Sequence diagrams
+# Core sequence flows
 
-Each sequence was discussed as a team in a meeting, then sketched and hand-drawn. The register-member sketch below is one example.
+## Registration and welcome grant
 
-![Register-member sequence sketch](../../files/attachements/register-member-sequence-sketch.png)
+```mermaid
+sequenceDiagram
+    actor User
+    participant CLI
+    participant Service as MeithealService
+    participant Members as MemberManager
+    participant Ledger as LedgerManager
 
-ChatGPT was then used to convert the sketches into PlantUML code, producing cleaner rendered diagrams and preserving them as documentation.
-
-All diagrams were verified by the team for quality. They communicate the intended design and interactions, rather than exact function calls or implementation details.
-
-## Register a member
-
-```plantuml
-@startuml
-title Register a member
-
-actor User
-boundary CLI
-control MemberManager
-control LedgerManager
-
-User -> CLI : Select "Register member"
-CLI -> User : Ask for name and email
-User -> CLI : Enter name and email
-CLI -> MemberManager : registerMember(name, email)
-activate MemberManager
-
-MemberManager -> MemberManager : Check that the email is not registered
-
-alt New member
-    MemberManager -> MemberManager : Create member with ACTIVE status
-    MemberManager -> LedgerManager : Apply welcome grant (120 credits)
-    activate LedgerManager
-    LedgerManager -> LedgerManager : Update member balance
-    LedgerManager -> LedgerManager : Append welcome-grant entry to ledger
-    LedgerManager --> MemberManager : Grant recorded
-    deactivate LedgerManager
-    MemberManager --> CLI : Registration successful
-    CLI --> User : Show success message
-else Duplicate email
-    MemberManager --> CLI : Registration failed - duplicate member
-    CLI --> User : Show duplicate-member error
-end
-
-deactivate MemberManager
-@enduml
-```
-
-## Suspend or reinstate a member
-
-```plantuml
-@startuml
-title Suspend or reinstate a member
-
-actor User
-boundary CLI
-control MemberManager
-
-User -> CLI : Select "Suspend / reinstate member"
-CLI -> User : Ask for member email address
-User -> CLI : Enter email address
-CLI -> MemberManager : findMemberByEmail(email)
-activate MemberManager
-MemberManager --> CLI : Member and current status
-deactivate MemberManager
-CLI --> User : Show current status and options:\nsuspend or reinstate
-User -> CLI : Select status action
-CLI -> MemberManager : updateMemberStatus(email, action)
-activate MemberManager
-
-alt Suspend selected
-    MemberManager -> MemberManager : Set member status to SUSPENDED
-else Reinstate selected
-    MemberManager -> MemberManager : Set member status to ACTIVE
-end
-
-MemberManager --> CLI : Status updated
-deactivate MemberManager
-CLI --> User : Show updated member status
-
-@enduml
-```
-
-## Publish an offer
-
-```plantuml
-@startuml
-title Publish an offer
-
-actor User
-boundary CLI
-control MemberManager
-control EngagementManager
-
-User -> CLI : Select "Publish an offer"
-CLI -> User : Ask for member email address
-User -> CLI : Enter email address
-CLI -> MemberManager : findMemberByEmail(email)
-activate MemberManager
-MemberManager -> MemberManager : Confirm member is ACTIVE
-MemberManager --> CLI : Active member confirmed
-deactivate MemberManager
-
-CLI -> EngagementManager : getSkillCategories()
-activate EngagementManager
-EngagementManager --> CLI : Available skill categories
-deactivate EngagementManager
-CLI --> User : Show skill categories
-User -> CLI : Select skill to offer
-CLI -> EngagementManager : publishOffer(member, skill)
-activate EngagementManager
-EngagementManager -> EngagementManager : Validate selected skill category
-
-alt Valid skill category
-    EngagementManager -> EngagementManager : Associate skill offer with member
-    EngagementManager --> CLI : Offer published
-    CLI --> User : Show success message
-else Invalid skill category
-    EngagementManager --> CLI : Offer rejected
-    CLI --> User : Show invalid-skill error
-end
-
-deactivate EngagementManager
-@enduml
-```
-
-## Raise a request
-
-```plantuml
-@startuml
-title Raise a request
-
-actor User
-boundary CLI
-control MemberManager
-control EngagementManager
-
-User -> CLI : Select "Raise a request"
-CLI -> User : Ask for member email address
-User -> CLI : Enter email address
-CLI -> MemberManager : findMemberByEmail(email)
-activate MemberManager
-MemberManager -> MemberManager : Confirm member is ACTIVE
-MemberManager --> CLI : Active member confirmed
-deactivate MemberManager
-
-CLI -> EngagementManager : getSkillCategories()
-activate EngagementManager
-EngagementManager --> CLI : Available skill categories
-deactivate EngagementManager
-CLI --> User : Show skill categories
-User -> CLI : Select category and enter start date,\nend date, and time credits
-CLI -> EngagementManager : raiseRequest(member, skill, startDate,\nendDate, timeCredits)
-activate EngagementManager
-EngagementManager -> EngagementManager : Validate category, dates, and time credits
-
-alt Valid category and dates
-    EngagementManager -> EngagementManager : Record request for member
-    EngagementManager --> CLI : Request raised
-    CLI --> User : Show success message
-else Invalid category or dates
-    EngagementManager --> CLI : Request rejected
-    CLI --> User : Show validation error
-end
-
-deactivate EngagementManager
-@enduml
-```
-
-
-## Propose an engagement
-
-No sequence diagram is needed. Engagement proposals are created automatically inside `EngagementManager`; they do not involve a user action or CLI interaction.
-
-## Confirm a request
-
-```plantuml
-@startuml
-title Confirm a request
-
-actor User
-boundary CLI
-control MemberManager
-control EngagementManager
-control LedgerManager
-
-User -> CLI : Select "Confirm a request"
-CLI -> User : Ask for member email address
-User -> CLI : Enter email address
-CLI -> MemberManager : findMemberByEmail(email)
-activate MemberManager
-MemberManager -> MemberManager : Confirm member is ACTIVE
-MemberManager --> CLI : Active member confirmed
-deactivate MemberManager
-
-CLI -> EngagementManager : getEngagementQueue(member)
-activate EngagementManager
-EngagementManager --> CLI : Matching proposed engagements
-deactivate EngagementManager
-CLI --> User : Show matches and ask to confirm or reject
-User -> CLI : Select engagement and decision
-CLI -> EngagementManager : recordDecision(member, engagement, decision)
-activate EngagementManager
-
-alt Confirm selected
-    EngagementManager -> EngagementManager : Check whether other party already confirmed
-    alt Other party has not confirmed
-        EngagementManager -> EngagementManager : Record member confirmation
-        EngagementManager --> CLI : Confirmation recorded - awaiting other party
-        CLI --> User : Show awaiting-confirmation message
-    else Other party already confirmed
-        EngagementManager -> LedgerManager : Check requestee has sufficient balance\nfor session cost and fee
-        activate LedgerManager
-        alt Sufficient balance
-            LedgerManager -> LedgerManager : Deduct session cost and fee\nfrom requestee balance
-            LedgerManager -> LedgerManager : Append transfer entry to ledger
-            LedgerManager -> LedgerManager : Add fee to community fund
-            LedgerManager --> EngagementManager : Transfer completed
-            EngagementManager --> CLI : Session confirmed
-            CLI --> User : Show success message
-        else Insufficient balance
-            LedgerManager --> EngagementManager : Transfer rejected
-            EngagementManager --> CLI : Confirmation failed - insufficient balance
-            CLI --> User : Show insufficient-balance error
-        end
-        deactivate LedgerManager
+    User->>CLI: register name and email
+    CLI->>Service: registerMember(name, email)
+    Service->>Members: validate and prepare ACTIVE member
+    Members-->>Service: prepared MemberId
+    Service->>Ledger: prepare welcome grant(MemberId)
+    alt all preparation succeeds
+        Service->>Members: commit member
+        Service->>Ledger: commit 120-credit transaction
+        Service-->>CLI: MemberView
+    else validation or grant fails
+        Service-->>CLI: failure with no state change
     end
-else Reject selected
-    EngagementManager -> EngagementManager : Record rejection
-    EngagementManager --> CLI : Rejection recorded
-    CLI --> User : Show rejection message
-end
-
-deactivate EngagementManager
-@enduml
+    CLI-->>User: render result
 ```
 
-## Cancel an engagement
+## Matching and proposal submission
 
-**Not complete - specification decision required.** R4 transfers credits when both parties confirm a session, but R14 says that cancelling a confirmed engagement less than 24 hours before its agreed start transfers no credits. At cancellation time, credits may already have transferred. The team must decide whether a refund or compensating ledger entry is permitted before a sequence diagram can be finalised.
+```mermaid
+sequenceDiagram
+    actor Helper
+    participant CLI
+    participant Service as MeithealService
+    participant Members as MemberManager
+    participant Work as EngagementManager
+    participant Clock as SimulatedClock
 
-## Apply for a community grant
-
-**Not complete - specification decision required.** The brief does not define whether a community grant is approved automatically, by a member, or by another user type. It also does not define how the grant amount is chosen. The team must decide these points before a sequence diagram can be finalised.
-
-## Query balance and history
-
-```plantuml
-@startuml
-title Query balance and history
-
-actor User
-boundary CLI
-control MemberManager
-control EngagementManager
-control LedgerManager
-
-User -> CLI : Select "Query balance and history"
-CLI -> User : Ask for member email address
-User -> CLI : Enter email address
-CLI -> MemberManager : findMemberByEmail(email)
-activate MemberManager
-MemberManager --> CLI : Member found
-deactivate MemberManager
-CLI --> User : Show query options:\nbalance, engagements, or ledger history
-User -> CLI : Select query option
-
-alt Balance
-    CLI -> MemberManager : getBalance(member)
-    activate MemberManager
-    MemberManager --> CLI : Balance value
-    deactivate MemberManager
-else Engagements
-    CLI -> EngagementManager : getEngagements(member)
-    activate EngagementManager
-    EngagementManager --> CLI : Read-only engagement history
-    deactivate EngagementManager
-else Ledger history
-    CLI -> LedgerManager : getLedgerEntries(member)
-    activate LedgerManager
-    LedgerManager --> CLI : Read-only ledger entries
-    deactivate LedgerManager
-end
-
-CLI --> User : Show requested information
-@enduml
+    Helper->>CLI: find-matches
+    CLI->>Service: findMatchingRequests(helperId)
+    Service->>Clock: currentDate()
+    Service->>Members: require active helper and requesters
+    Service->>Work: calculate eligible open requests
+    Work-->>Service: immutable candidates
+    Service-->>CLI: candidates
+    Note over Work: Read-only. No proposal or reservation exists yet.
+    Helper->>CLI: submit-proposal(requestId, date)
+    CLI->>Service: submitProposal(helperId, requestId, date)
+    Service->>Members: recheck active members
+    Service->>Work: validate and store PENDING proposal
+    Note over Work: No aggregate helper daily-hours reservation applies.
+    Service-->>CLI: ProposalView or failure
 ```
 
-## Report
+## Proposal selection and agreement
 
-```plantuml
-@startuml
-title Report
+```mermaid
+sequenceDiagram
+    actor Requester
+    participant CLI
+    participant Service as MeithealService
+    participant Members as MemberManager
+    participant Work as EngagementManager
+    participant Ledger as LedgerManager
+    participant IDs as IdFactory
 
-actor User
-boundary CLI
-control LedgerManager
+    Requester->>CLI: select-proposal(proposalId)
+    CLI->>Service: selectProposal(requesterId, proposalId)
+    Service->>Members: recheck active requester and helper
+    Service->>Work: validate open request and pending proposal
+    Service->>IDs: new EngagementId
+    Service->>Ledger: prepare hold(payment + levy)
+    Ledger->>Ledger: require available balance >= -180
+    Service->>Work: prepare selection, closure, rejection, engagement
+    alt all preparation succeeds
+        Service->>Ledger: commit HELD hold
+        Service->>Work: commit prepared work state
+        Service-->>CLI: EngagementView
+    else any check or staging fails
+        Service-->>CLI: failure with no state change
+    end
+```
 
-User -> CLI : Select "Report"
-CLI -> LedgerManager : getReport()
-activate LedgerManager
-LedgerManager --> CLI : Total credits in circulation\nand community fund balance
-deactivate LedgerManager
-CLI --> User : Show report
+## Two confirmations and settlement
 
-@enduml
+```mermaid
+sequenceDiagram
+    actor Participant
+    participant CLI
+    participant Service as MeithealService
+    participant Work as EngagementManager
+    participant Ledger as LedgerManager
+    participant Clock as SimulatedClock
+
+    Participant->>CLI: confirm-completion(engagementId)
+    CLI->>Service: confirmCompletion(engagementId, actorId)
+    Service->>Clock: currentDate()
+    Service->>Work: validate participant, date, state, duplicate
+    alt first confirmation
+        Service->>Work: record actor only
+        Service-->>CLI: awaiting other participant
+    else second confirmation
+        Service->>Ledger: prepare settlement by engagement ID
+        Ledger->>Ledger: prepare service payment and any positive levy transaction
+        Service->>Work: prepare second confirmation and COMPLETED
+        alt settlement preparation and commit succeed
+            Service->>Ledger: commit prepared transactions and SETTLED hold
+            Service->>Work: commit confirmation and COMPLETED
+            Service-->>CLI: completed EngagementView
+        else technical failure
+            Service-->>CLI: ATOMIC_OPERATION_FAILED
+            Note over Work,Ledger: No second confirmation, no transaction, hold remains HELD
+        end
+    end
+```
+
+## Cancellation
+
+```mermaid
+sequenceDiagram
+    actor Participant
+    participant CLI
+    participant Service as MeithealService
+    participant Work as EngagementManager
+    participant Ledger as LedgerManager
+    participant Clock as SimulatedClock
+
+    Participant->>CLI: cancel-engagement(engagementId)
+    CLI->>Service: cancelEngagement(engagementId, actorId)
+    Service->>Clock: currentDate()
+    Service->>Work: validate participant, AGREED, today before date
+    Service->>Ledger: prepare hold release
+    Service->>Work: prepare cancellation record and state change
+    alt valid and all preparation succeeds
+        Service->>Ledger: commit RELEASED hold
+        Service->>Work: commit CANCELLED and cancellation record
+        Service-->>CLI: cancelled EngagementView
+    else invalid or technical failure
+        Service-->>CLI: failure with no state change
+    end
+```
+
+## Community grant
+
+```mermaid
+sequenceDiagram
+    actor Member
+    participant CLI
+    participant Service as MeithealService
+    participant Ledger as LedgerManager
+    participant Clock as SimulatedClock
+
+    Member->>CLI: apply-grant(amount)
+    CLI->>Service: applyForCommunityGrant(memberId, amount)
+    Service->>Clock: currentDate()
+    Service->>Ledger: validate positive amount, actual balance, fund, date
+    alt approved
+        Ledger->>Ledger: transfer fund to member and append transaction
+        Ledger-->>Service: CommunityGrantView
+    else denied
+        Ledger-->>Service: failure and no state change
+    end
+    Service-->>CLI: result
 ```
