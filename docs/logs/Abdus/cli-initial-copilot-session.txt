@@ -1,0 +1,1949 @@
+# Copilot CLI Session
+
+> [!NOTE]
+> - **Session ID:** `95c12137-accd-4aff-b8e3-b087d143e360`  
+> - **Started:** 11/8/2026, 7:54:36 PM  
+> - **Duration:** 1m 22s  
+> - **Exported:** 11/8/2026, 7:55:59 PM  
+
+---
+
+<sub>4s</sub>
+
+### Info
+
+Copilot Fusion selected GPT-5.6 Luna because it was the best choice out of the models available in your plan.
+
+---
+
+<sub>4s</sub>
+
+### User
+
+Implement a small first CLI contribution for Abdus in the CURRENT repository COMP41670-Excursions. Work on the existing feat/cli-command-loop branch. Do not commit, stage, push, open PRs, create branches, refactor after generation, or modify Git configuration. Do not use subagents.
+
+First read the repository build.gradle, settings.gradle, cli/build.gradle, docs/design/WorkAllocation.md and docs/logs/README.md. Read these authoritative newer handover documents outside the repository at ../group-handover/: AGENTS.md, AGENT.md, people/adbus.md, 09-cli-command-design.md, 04-shared-contracts.md, and README.md. The actual personal folder is docs/logs/Abdus, not the handover spelling Adbus.
+
+The shared MeithealService and types do not exist yet. Do NOT invent service types, manager implementations, domain operations, fake registration, balances, or member state. Restrict this slice to CLI infrastructure independent of those contracts:
+1. CommandParser plus an immutable parsed command value under ie.ucd.meitheal.cli. Parse command name and argument list, whitespace, quoted multi-word arguments, and empty quoted arguments. Support escaped double quotes and escaped backslashes inside double-quoted arguments. Choose and document explicit syntax errors for unmatched quotes and invalid/dangling escapes. Preserve argument case/content. Use immutable argument lists. No domain validation.
+2. MeithealCli loop with injected standard Reader and Writer (or comparably small I/O abstractions), no global replacement of System.in in tests. Initially implement only help and exit. Blank lines are ignored; unknown commands, malformed quoting, and wrong argument counts produce actionable deterministic errors and the loop continues. EOF and exit terminate cleanly. Help lists only the implemented commands so it does not claim unsupported features. No financial/status/date/category rules, business state, or placeholder commands.
+3. A minimal standalone CLI main entry point that creates only this infrastructure, not a domain composition root. Configure the application plugin and main class ONLY in cli/build.gradle so :cli:run works, forwarding standardInput when using Gradle. Do not change root build/toolchain, wrapper, other modules, or tests module wiring.
+4. Focused JUnit 5 tests in cli/src/test/java for parser edge cases and scripted help/unknown/malformed/argument-count/blank-line/EOF/exit sequences. Verify exit stops processing subsequent input, errors allow subsequent valid commands, and parsed argument collections cannot be mutated.
+5. Update the existing README briefly with actual supported CLI scope, exact run command and syntax. Preserve existing unrelated content; replace the obsolete unknown-run-command paragraph. Do not create additional Markdown files. Do not update logs yet; a subsequent evidence step will record actual verification.
+
+Keep the solution small and ordinary. This is the initial implementation before a separately assessed Lab 9 refactoring. Do not deliberately make it complex, do not select a hotspot, fabricate inspection results or churn, or perform a refactor in this turn. Do not claim tests passed unless you actually ran them. You may run .\gradlew.bat :cli:test if dependencies are ready; otherwise state the blocker. Use ASCII hyphens in authored prose. At the end summarize files, chosen parser syntax, tests performed, and real limitations. Stop before any commit.
+
+Add a minimal root .gitignore containing .gradle/ and **/build/ because the baseline build produces untracked outputs. Do not change other build configuration. Shell permission is disabled; do not run tests yourself. I will run and record verification after generation.
+
+---
+
+<sub>11s</sub>
+
+### `view`
+
+**view the file at C:\\Users\\admin\\OneDrive - University College Dublin\\Documents\\School\\School Current\\COMP41670 Software Engineering\\Group Software Project\\COMP41670-Excursions\\build.gradle.**
+
+`C:\Users\admin\OneDrive - University College Dublin\Documents\School\School Current\COMP41670 Software Engineering\Group Software Project\COMP41670-Excursions\build.gradle`
+
+<details>
+<summary>20 lines</summary>
+
+```
+plugins {
+    id 'base'
+}
+
+group = 'ie.ucd.meitheal'
+version = '0.1.0-SNAPSHOT'
+
+subprojects {
+    apply plugin: 'java-library'
+
+    java {
+        toolchain {
+            languageVersion = JavaLanguageVersion.of(21)
+        }
+    }
+
+    dependencies {
+        testImplementation platform('org.junit:junit-bom:5.11.3')
+        testImplementation 'org.junit.jupiter:junit-jupiter'
+    }
+
+    tasks.withType(Test).configureEach {
+        useJUnitPlatform()
+    }
+}
+```
+
+</details>
+
+
+---
+
+<sub>11s</sub>
+
+### `view`
+
+**view the file at C:\\Users\\admin\\OneDrive - University College Dublin\\Documents\\School\\School Current\\COMP41670 Software Engineering\\Group Software Project\\COMP41670-Excursions\\settings.gradle.**
+
+`C:\Users\admin\OneDrive - University College Dublin\Documents\School\School Current\COMP41670 Software Engineering\Group Software Project\COMP41670-Excursions\settings.gradle`
+
+<details>
+<summary>20 lines</summary>
+
+```
+pluginManagement {
+    repositories {
+        gradlePluginPortal()
+    }
+}
+
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories {
+        mavenCentral()
+    }
+}
+
+rootProject.name = 'Meitheal'
+
+include(
+    'member-manager',
+    'ledger-manager',
+    'engagement-manager',
+    'scheduler',
+    'cli',
+    'tests'
+)
+```
+
+</details>
+
+
+---
+
+<sub>11s</sub>
+
+### `view`
+
+**view the file at C:\\Users\\admin\\OneDrive - University College Dublin\\Documents\\School\\School Current\\COMP41670 Software Engineering\\Group Software Project\\COMP41670-Excursions\\cli\\build.gradle.**
+
+`C:\Users\admin\OneDrive - University College Dublin\Documents\School\School Current\COMP41670 Software Engineering\Group Software Project\COMP41670-Excursions\cli\build.gradle`
+
+```
+// Configuration is inherited from the root project.
+
+```
+
+
+---
+
+<sub>11s</sub>
+
+### `view`
+
+**view the file at C:\\Users\\admin\\OneDrive - University College Dublin\\Documents\\School\\School Current\\COMP41670 Software Engineering\\Group Software Project\\COMP41670-Excursions\\docs\\design\\WorkAllocation.md.**
+
+`C:\Users\admin\OneDrive - University College Dublin\Documents\School\School Current\COMP41670 Software Engineering\Group Software Project\COMP41670-Excursions\docs\design\WorkAllocation.md`
+
+<details>
+<summary>52 lines</summary>
+
+```
+# Suggested work allocation
+
+This split gives each person a clear subsystem while Joe owns integration, shared contracts, the simulated clock, and final verification. Each subsystem owner implements production code, focused tests, and a concise handoff note. Business rules stay inside the service and managers, never in the CLI.
+
+## Team responsibilities
+
+| Person | Primary ownership | Required deliverables | Main rules |
+| --- | --- | --- | --- |
+| Joe Biju | Integration lead, shared architecture, service coordination, simulated clock, and final verification | Define shared typed IDs, manager interfaces, result and error types, immutable views, `MeithealService`, dependency wiring, and the forward-only simulated clock. Coordinate cross-manager operations, resolve recorded amendments, merge completed work, and run the final unit and end-to-end suite. Maintain the rule-to-test checklist. | R12, deterministic time progression, and cross-cutting verification of R1-R14 |
+| Moaz Refaei | `MemberManager` and member domain | Implement registration, canonical unique email lookup, ACTIVE and SUSPENDED state, suspension and reinstatement, active-member checks, and member-category publications. Registration coordinates exactly one welcome grant through the service and ledger contract. | R3 and R6 |
+| Benjamin Long | `LedgerManager`, balances, holds, and community fund | Implement balances, append-only transactions, welcome grants, credit holds, atomic engagement settlement, levy calculation, the overdraft floor, community grants, balance/history queries, and reports. Provide boundary and invariant tests for every credit mutation. | R1, R2, R3, R7, R10, and R11 |
+| Matthew Gartland | `EngagementManager` and engagement domain | Implement requests, read-only matching, helper-submitted dated proposals, proposal lifecycle, engagements, confirmations, and cancellation records. Use the member contract for eligibility and let `MeithealService` coordinate ledger operations. | R4, R5, R8, R9, R13, and R14 |
+| Adbus Samad Bhadmus | CLI and user workflow | Implement the console interface and all Section 5 workflows, including parsing, active-member selection, input errors, and immutable result rendering. The CLI calls `MeithealService` only and contains no balance, levy, status, or engagement business rules. Provide scripted CLI tests for successful and rejected paths. | Presentation of all operations; no independent rule enforcement |
+
+## Rule ownership
+
+| Rule | Primary owner | Required collaboration |
+| --- | --- | --- |
+| R1 - 60 credits per hour | Benjamin | Matthew supplies the validated session duration. |
+| R2 - overdraft floor | Benjamin | Matthew provides validated engagement data; Joe coordinates hold and settlement flows. |
+| R3 - permitted credit creation | Benjamin | Moaz stages successful registration; Joe verifies the full registration flow. The initial fund is zero unless a binding clarification and recorded amendment permit otherwise. |
+| R4 - two confirmations before transfer | Matthew | Benjamin guarantees settlement is atomic and cannot run twice; Joe coordinates the operation. |
+| R5 - no self-fulfilment | Matthew | Moaz supplies stable member identity and active-status checks. |
+| R6 - suspended-member restrictions | Moaz | Matthew invalidates pending proposals but preserves agreed work. |
+| R7 - append-only ledger | Benjamin | All other modules use ledger contracts and never mutate entries directly. |
+| R8 - session duration bounds | Matthew | Benjamin calculates credits only from a validated duration. |
+| R9 - fulfilment window | Matthew | Adbus parses and passes dates without enforcing the rule. |
+| R10 - 5 percent floor levy and floor check | Benjamin | Matthew provides engagement data; Joe coordinates settlement. |
+| R11 - community grants | Benjamin | Joe and Adbus expose the documented grant command. The recorded rolling date policy applies. |
+| R12 - read-only queries | Joe | Every manager returns immutable snapshots or copies; Adbus only displays them. |
+| R13 - configured categories | Matthew | `CategoryCatalog` is fixed at startup; Moaz owns member-category publications and Adbus displays returned categories. |
+| R14 - late cancellation | Matthew | Benjamin releases the hold through the coordinated flow. The date-only late-cancellation policy is recorded in the design. |
+
+## Integration contracts
+
+- Joe defines shared interfaces and domain records before subsystem implementation diverges. Parameter meaning, ownership, errors, and amendments must be agreed.
+- `MemberManager` owns member identity, canonical email lookup, status, and member-category publications. Other modules query it and must not duplicate member state.
+- `LedgerManager` is the only component that changes balances, holds, transactions, or the community-fund balance.
+- Registration succeeds only when the member and one 120-credit welcome grant are both created. A failure leaves neither visible.
+- `EngagementManager` owns requests, proposals, engagements, confirmations, and cancellation records. Matching is read-only; a helper explicitly submits one dated pending proposal per request.
+- `MeithealService` coordinates every cross-manager operation. It creates the engagement and hold during selection, coordinates the second confirmation with settlement, and coordinates cancellation with hold release.
+- Settlement is atomic. It creates one positive service-payment transaction and creates a community-levy transaction only when the floored levy is positive. Failure leaves balances, holds, transactions, and engagement state unchanged.
+- `SimulatedClock` is shared and forward-only. Advancing it triggers no automatic settlement, cancellation, grant, or other business operation.
+- Managers that use dates receive the shared clock or an explicit current date. They never read the machine clock.
+- The CLI calls `MeithealService` only. It parses and renders data but does not repeat domain validation.
+- Query methods return immutable values or defensive copies so callers cannot mutate internal collections.
+
+## Testing and handoff
+
+Each subsystem owner must provide:
+
+1. Production code for the owned subsystem.
+2. Focused tests covering assigned rules, boundaries, repeated calls, and rejected no-state-change cases.
+3. A short handoff note describing inputs, outputs, errors, and assumptions.
+4. A small feature branch and reviewable pull request. Peer review is recommended, and a merge commit preserves the attributable commit history.
+
+Joe completes integration by:
+
+1. Wiring the shared clock, catalog, IDs, managers, `MeithealService`, and CLI composition root.
+2. Checking every rule and invariant has at least one named test.
+3. Running all unit tests together on a clean checkout.
+4. Adding end-to-end tests for registration, suspension, offers, requests, matching, proposal selection, two-party confirmation, failed settlement, date movement, queries, and reporting.
+5. Verifying duplicate operations do not create extra grants, transfers, fees, or ledger entries.
+6. Confirming documented policies and amendments are implemented consistently before final acceptance.
+```
+
+</details>
+
+
+---
+
+<sub>11s</sub>
+
+### `view`
+
+**view the file at C:\\Users\\admin\\OneDrive - University College Dublin\\Documents\\School\\School Current\\COMP41670 Software Engineering\\Group Software Project\\COMP41670-Excursions\\docs\\logs\\README.md.**
+
+`C:\Users\admin\OneDrive - University College Dublin\Documents\School\School Current\COMP41670 Software Engineering\Group Software Project\COMP41670-Excursions\docs\logs\README.md`
+
+<details>
+<summary>16 lines</summary>
+
+```
+# Logs
+
+This directory holds the team's AI-usage and change records. Keep entries factual, specific, and linked to the relevant commit or pull request.
+
+## Shared templates
+
+Do not edit `COMP41670_Project_AI_Usage_Log_Template.md` or `COMP41670_Project_DesignReport_Template.md` without group consensus. They are shared reference templates, not individual working documents.
+
+## AI interaction logs
+
+Each member has an `interaction-log-<name>.md` file in their own folder. Add one row for every significant use of an AI tool. Record the task, prompt summary, output, the judgement applied, changes made, verification, and resulting commit SHA. Use the AI usage-log template in this folder for the expected level of detail.
+
+## Individual change logs
+
+Each member also has a `change-log.md` file in their folder. Write the matching change-log entry as part of preparing the commit it describes, rather than waiting until after that commit exists. Include the branch, commit SHA when available, concise change summary, verification, and pull-request link or number. A team member may instead update the change log separately in a batch commit when that is easier.
+
+## Project change log
+
+Update `change-log.md` in this folder whenever a pull request is opened, substantially revised, merged, or closed. Write the entry alongside the related change whenever practical. A team member may also make a separate batch update when that is easier. Record the branch, review status, summary, resulting commit on `main`, and verification. Update the Project Progress table with completed work, the current state of `main`, next steps, and an owner.
+
+## Before committing or opening a pull request
+
+1. Update your AI interaction log for any significant AI use.
+2. Write the matching individual change-log entry before committing, or schedule it for a separate batch update.
+3. Verify the change and record the evidence.
+4. Open or update the pull request.
+5. Update the project change log when the pull-request status changes, alongside the related change where practical or in a separate batch update.
+```
+
+</details>
+
+
+---
+
+<sub>11s</sub>
+
+### `view` — Failed
+
+**view the file at C:\\Users\\admin\\OneDrive - University College Dublin\\Documents\\School\\group-handover\\AGENTS.md.**
+
+`C:\Users\admin\OneDrive - University College Dublin\Documents\School\group-handover\AGENTS.md`
+
+```
+Permission denied because no interactive user response was available. Retry in an interactive session so the user can approve it, or try an alternative that does not require this permission.
+```
+
+
+---
+
+<sub>11s</sub>
+
+### `view` — Failed
+
+**view the file at C:\\Users\\admin\\OneDrive - University College Dublin\\Documents\\School\\group-handover\\AGENT.md.**
+
+`C:\Users\admin\OneDrive - University College Dublin\Documents\School\group-handover\AGENT.md`
+
+```
+Permission denied because no interactive user response was available. Retry in an interactive session so the user can approve it, or try an alternative that does not require this permission.
+```
+
+
+---
+
+<sub>11s</sub>
+
+### `view` — Failed
+
+**view the file at C:\\Users\\admin\\OneDrive - University College Dublin\\Documents\\School\\group-handover\\people\\adbus.md.**
+
+`C:\Users\admin\OneDrive - University College Dublin\Documents\School\group-handover\people\adbus.md`
+
+```
+Permission denied because no interactive user response was available. Retry in an interactive session so the user can approve it, or try an alternative that does not require this permission.
+```
+
+
+---
+
+<sub>11s</sub>
+
+### `view` — Failed
+
+**view the file at C:\\Users\\admin\\OneDrive - University College Dublin\\Documents\\School\\group-handover\\09-cli-command-design.md.**
+
+`C:\Users\admin\OneDrive - University College Dublin\Documents\School\group-handover\09-cli-command-design.md`
+
+```
+Permission denied because no interactive user response was available. Retry in an interactive session so the user can approve it, or try an alternative that does not require this permission.
+```
+
+
+---
+
+<sub>11s</sub>
+
+### `view` — Failed
+
+**view the file at C:\\Users\\admin\\OneDrive - University College Dublin\\Documents\\School\\group-handover\\04-shared-contracts.md.**
+
+`C:\Users\admin\OneDrive - University College Dublin\Documents\School\group-handover\04-shared-contracts.md`
+
+```
+Permission denied because no interactive user response was available. Retry in an interactive session so the user can approve it, or try an alternative that does not require this permission.
+```
+
+
+---
+
+<sub>11s</sub>
+
+### `view` — Failed
+
+**view the file at C:\\Users\\admin\\OneDrive - University College Dublin\\Documents\\School\\group-handover\\README.md.**
+
+`C:\Users\admin\OneDrive - University College Dublin\Documents\School\group-handover\README.md`
+
+```
+Permission denied because no interactive user response was available. Retry in an interactive session so the user can approve it, or try an alternative that does not require this permission.
+```
+
+
+---
+
+<sub>17s</sub>
+
+### `glob`
+
+**C:\\Users\\admin\\OneDrive - University College Dublin\\Documents\\School\\School Current\\COMP41670 Software Engineering\\Group Software Project\\group-handover**
+
+`"**/*" in ~\OneDrive - University College Dublin\Documents\School\School Current\COMP41670 Software Engineering\Group Software Project\group-handover`
+
+<details>
+<summary>41 matches</summary>
+
+```
+[glob: 35 path(s) under C:/Users/admin/OneDrive - University College Dublin/Documents/School/School Current/COMP41670 Software Engineering/Group Software Project/group-handover; grouped by directory]
+
+C:/Users/admin/OneDrive - University College Dublin/Documents/School/School Current/COMP41670 Software Engineering/Group Software Project/group-handover/ (13 path(s))
+  01-project-and-current-state.md
+  02-architecture-and-implementation.md
+  03-invariants-and-traceability.md
+  04-shared-contracts.md
+  05-testing-strategy.md
+  06-integration-playbook.md
+  07-deliverables-report-and-ai-log.md
+  08-decisions-risks-and-open-items.md
+  09-cli-command-design.md
+  AGENT.md
+  AGENTS.md
+  CHANGES.md
+  README.md
+
+C:/Users/admin/OneDrive - University College Dublin/Documents/School/School Current/COMP41670 Software Engineering/Group Software Project/group-handover/logs/ (11 path(s))
+  Adbus/AI-USAGE-LOG.md
+  Adbus/INTERACTION-LOG.md
+  Benjamin/AI-USAGE-LOG.md
+  Benjamin/INTERACTION-LOG.md
+  Joe/AI-USAGE-LOG.md
+  Joe/INTERACTION-LOG.md
+  Matthew/AI-USAGE-LOG.md
+  Matthew/INTERACTION-LOG.md
+  Moaz/AI-USAGE-LOG.md
+  Moaz/INTERACTION-LOG.md
+  README.md
+
+C:/Users/admin/OneDrive - University College Dublin/Documents/School/School Current/COMP41670 Software Engineering/Group Software Project/group-handover/people/ (6 path(s))
+  README.md
+  adbus.md
+  benjamin.md
+  joe.md
+  matthew.md
+  moaz.md
+
+C:/Users/admin/OneDrive - University College Dublin/Documents/School/School Current/COMP41670 Software Engineering/Group Software Project/group-handover/diagrams/ (5 path(s))
+  architecture.md
+  credit-and-atomicity.md
+  domain-model.md
+  sequence-flows.md
+  state-machines.md
+
+[extensions: .md=35]
+```
+
+</details>
+
+
+---
+
+<sub>17s</sub>
+
+### `view`
+
+**view the file at C:\\Users\\admin\\OneDrive - University College Dublin\\Documents\\School\\School Current\\COMP41670 Software Engineering\\Group Software Project\\COMP41670-Excursions\\README.md.**
+
+`C:\Users\admin\OneDrive - University College Dublin\Documents\School\School Current\COMP41670 Software Engineering\Group Software Project\COMP41670-Excursions\README.md`
+
+<details>
+<summary>8 lines</summary>
+
+````
+# Group 1 - Excursions
+
+Moaz Refaei, Benjamin Long, Joe Biju, Matthew Gartland, Abdus Samad Bhadmus
+
+## Setup
+
+Install a Java 21 JDK and use the included Gradle Wrapper (`./gradlew` on macOS/Linux or `gradlew.bat` on Windows):
+
+```bash
+./gradlew clean build test
+```
+
+For the console application, the run command requires user verification: no application main class or Gradle `run` task is currently configured, so the command cannot be determined. Use the verified command in place of `<console-run-command>` once available.
+````
+
+</details>
+
+
+---
+
+<sub>17s</sub>
+
+### `glob`
+
+**C:\\Users\\admin\\OneDrive - University College Dublin\\Documents\\School\\School Current\\COMP41670 Software Engineering\\Group Software Project\\COMP41670-Excursions\\cli**
+
+`"**/*" in cli`
+
+```
+C:\Users\admin\OneDrive - University College Dublin\Documents\School\School Current\COMP41670 Software Engineering\Group Software Project\COMP41670-Excursions\cli\build.gradle
+C:\Users\admin\OneDrive - University College Dublin\Documents\School\School Current\COMP41670 Software Engineering\Group Software Project\COMP41670-Excursions\cli\build\libs\cli.jar
+C:\Users\admin\OneDrive - University College Dublin\Documents\School\School Current\COMP41670 Software Engineering\Group Software Project\COMP41670-Excursions\cli\build\tmp\jar\MANIFEST.MF
+```
+
+
+---
+
+<sub>17s</sub>
+
+### `glob`
+
+**C:\\Users\\admin\\OneDrive - University College Dublin\\Documents\\School\\School Current\\COMP41670 Software Engineering\\Group Software Project\\COMP41670-Excursions\\docs\\logs**
+
+`"Abdus/**" in docs\logs`
+
+```
+No files matched the pattern.
+```
+
+
+---
+
+<sub>22s</sub>
+
+### `view`
+
+**view the file at C:\\Users\\admin\\OneDrive - University College Dublin\\Documents\\School\\School Current\\COMP41670 Software Engineering\\Group Software Project\\group-handover\\AGENTS.md.**
+
+`C:\Users\admin\OneDrive - University College Dublin\Documents\School\School Current\COMP41670 Software Engineering\Group Software Project\group-handover\AGENTS.md`
+
+<details>
+<summary>11 lines</summary>
+
+```
+# Automated contributor instructions
+
+Read and follow [AGENT.md](AGENT.md) before making changes in this folder.
+
+Critical rules:
+
+- Use ASCII hyphens only in authored text.
+- Work directly in `COMP41670-Excursions` using the feature-branch and merge-commit workflow in `README.md`.
+- Treat the project brief as authoritative and do not invent unresolved behaviour.
+- Keep Java 21 console scope. Do not add web, authentication, database, container, cloud, or GUI work.
+- Keep business rules out of the CLI.
+- Preserve atomicity, immutable query results, typed IDs, whole-credit arithmetic, and the shared simulated clock.
+- Add or update focused tests for every changed invariant or contract.
+- Do not claim implementation, verification, contribution, or AI-log evidence that does not exist.
+```
+
+</details>
+
+
+---
+
+<sub>22s</sub>
+
+### `view`
+
+**view the file at C:\\Users\\admin\\OneDrive - University College Dublin\\Documents\\School\\School Current\\COMP41670 Software Engineering\\Group Software Project\\group-handover\\AGENT.md.**
+
+`C:\Users\admin\OneDrive - University College Dublin\Documents\School\School Current\COMP41670 Software Engineering\Group Software Project\group-handover\AGENT.md`
+
+<details>
+<summary>66 lines</summary>
+
+```
+# Agent and contributor rules
+
+These rules apply to every human or AI contributor using this handover.
+
+## Writing
+
+- Use the basic ASCII hyphen character for all dashes.
+- Keep implementation status factual. Do not describe planned code as implemented.
+- Use `requester` for the member asking for help and `helper` for the provider.
+- Use `public method`, `contract`, or `interface`. Do not imply a web API.
+- Separate approved facts, recommendations, and unresolved decisions.
+
+## Authority
+
+Use this source order when resolving a conflict:
+
+1. Project brief and binding Brightspace clarifications.
+2. The agreed design, invariants, contracts, decisions, diagrams, and ownership pages in this handover.
+3. An approved amendment recorded in this handover.
+4. The current shared implementation repository, where it does not conflict with the above.
+
+Do not silently invent behaviour. Add an unresolved item to `08-decisions-risks-and-open-items.md` and ask the team when a choice changes observable behaviour.
+
+## Repository safety
+
+- Do not rewrite, squash, or attribute another member's work to yourself.
+- Preserve unrelated working-tree changes.
+- Work directly in `COMP41670-Excursions`. Each person starts a small feature branch from `main`, then merges it back through a pull request using a merge commit.
+- Keep each person's contribution attributable through small, honest, conventional commits. Do not include Codex or other AI-tool names in branch names, commit messages, or pull request titles.
+- Peer review is recommended, particularly for shared contracts and cross-owner changes. It is not a merge blocker; Joe is the merge approver and team coordinator.
+
+## Scope
+
+- Target Java 21, JUnit 5, Git, and a console interface.
+- Do not add web or GUI frameworks, authentication, passwords, sessions, databases, ORMs, Docker, cloud deployment, mobile clients, or real payments.
+- Persistence is optional and must not delay the required in-memory implementation.
+- One process has one active CLI member ID. It is account selection, not authentication.
+
+## Architecture
+
+- The CLI calls `MeithealService` and owns no domain state.
+- `MemberManager` owns members, canonical email lookup, status, and published categories.
+- `EngagementManager` owns requests, proposals, engagements, confirmation state, and cancellation records.
+- `LedgerManager` owns balances, the fund, credit holds, and append-only transactions.
+- `SimulatedClock` is the only current-date source.
+- Moaz owns the fixed-at-startup `CategoryCatalog`; other managers consume immutable category queries.
+- `IdFactory` generates typed IDs. Managers enforce uniqueness.
+- Return immutable records and immutable collection copies.
+
+## Financial rules
+
+- Use whole credits and integer arithmetic only.
+- Each individual request and engagement is 1 through 480 minutes. There is no aggregate helper daily-hours limit or time-capacity reservation.
+- Service payment equals `durationMinutes`.
+- Levy equals `servicePayment * 5 / 100`, using integer division.
+- Available balance equals ledger balance minus all `HELD` credit holds.
+- A hold is not a transfer and creates no transaction.
+- Settlement creates one service-payment transaction and creates one levy transaction when the calculated levy is positive, subject to the recorded INV-10 amendment.
+- Failed atomic operations publish no partial state.
+- Do not add a non-zero initial fund seed unless the team records how it complies with R3 or receives a binding clarification.
+
+## Testing
+
+- Test through public contracts where possible.
+- Every rejection test checks that state did not change.
+- Test exact boundaries, including 1 and 480 minutes, -180 and -181 available credits, 19 and 20 credit levy inputs, first and second confirmations, and cancellation dates.
+- Inject deterministic IDs and dates.
+- Include failure injection for every cross-manager atomic operation.
+- Verify returned collections cannot mutate manager state.
+- Name the invariant or rule in the test display name or documentation.
+
+## AI use and academic integrity
+
+- Log every significant AI interaction that informs assessed work.
+- Record the task, tool and version, prompt summary, output summary, accepted or changed status, specific correction, verification method, and commit SHA.
+- Rejected AI output is worth logging when it shows technical judgement.
+- Never fabricate an AI-log entry, test result, commit, contribution, or verification step.
+- Each person must understand and defend the code and decisions attributed to them.
+- Keep working evidence in your own folder under `logs/`; do not edit another member's personal log while implementing your feature.
+
+## Documentation changes
+
+- Update contracts before independently changing a cross-module signature.
+- Update the invariant map when an enforcement point or named test changes.
+- Update diagrams only after the underlying design decision is approved.
+- Keep the report honest about limitations and deviations from the brief.
+- Update your personal interaction and AI-use logs before opening a pull request. Consolidate team-facing documentation in a separate documentation-only commit after agreement.
+```
+
+</details>
+
+
+---
+
+<sub>22s</sub>
+
+### `view`
+
+**view the file at C:\\Users\\admin\\OneDrive - University College Dublin\\Documents\\School\\School Current\\COMP41670 Software Engineering\\Group Software Project\\group-handover\\people\\adbus.md.**
+
+`C:\Users\admin\OneDrive - University College Dublin\Documents\School\School Current\COMP41670 Software Engineering\Group Software Project\group-handover\people\adbus.md`
+
+<details>
+<summary>82 lines</summary>
+
+````
+# Adbus Samad Bhadmus - console interface and workflow
+
+## Mission
+
+Make every required operation reachable and understandable through one console process while keeping all business rules in `MeithealService` and the managers.
+
+## Own
+
+- Menu, REPL, or scripted command loop.
+- Command parsing and help.
+- One optional active member ID.
+- Member selection and switching.
+- Input conversion for typed IDs, emails, ISO dates, minutes, and credits.
+- Rendering immutable views and stable failures.
+- Continuing safely after invalid input or business rejection.
+- Scripted CLI tests and assessed README command reference.
+- A command-to-service reachability map covering every required operation.
+- Application-start smoke verification through the documented run command.
+
+Use [Suggested CLI command design](../09-cli-command-design.md) as the starting vocabulary.
+
+## Suggested classes
+
+```text
+cli/MeithealCli
+cli/CommandParser
+cli/Command
+cli/ConsoleInput
+cli/ConsoleOutput
+cli/ViewRenderer
+```
+
+Keep I/O behind small interfaces so tests can supply scripted input and capture output without replacing `System.in` globally.
+
+## Provide
+
+- One run loop that reaches every required operation.
+- One command reference for the repository README.
+- Stable rendering of success and failure results.
+- A scripted integration harness for full workflows.
+- A reachability map that names the command, service method, active-member requirement, and scripted test for every required operation.
+
+## Consume
+
+Only `MeithealService` public methods and immutable views. Do not call manager implementations directly.
+
+Joe provides date, member-selection, and composition wiring. Moaz provides member views and status results. Benjamin provides balance, ledger, grant, and report views. Matthew provides request, proposal, candidate, and engagement views.
+
+## Parsing versus business validation
+
+The CLI owns syntax:
+
+- Command name and number of arguments.
+- Typed ID text shape.
+- Integer parsing.
+- ISO date parsing.
+- Quoted or prompted names.
+
+The service owns meaning:
+
+- Member and category existence.
+- Active status.
+- Email uniqueness.
+- Window and duration.
+- Matching, self-exclusion, and proposal uniqueness.
+- Affordability and levy.
+- Participant and lifecycle state.
+- Grant and cancellation eligibility.
+
+Never calculate a levy, balance, aggregate hours total, or late flag in the CLI.
+
+## First pull request
+
+1. Add testable input and output adapters.
+2. Add `help`, `exit`, `register`, `select-member`, `switch-member`, `balance`, `ledger`, and `report` commands against the shared service skeleton.
+3. Add clear no-active-member handling.
+4. Add scripted tests for success, malformed input, service rejection, and continuing after error.
+5. Hand Joe the run command and README command section.
+
+Add work-lifecycle commands as Matthew's views and contracts stabilize.
+
+## Required tests
+
+- Help includes all required commands.
+- Unknown command and missing argument do not crash.
+- Invalid date, ID, duration, and credit text are actionable.
+- Failed member switch retains the previous active member.
+- Active-member commands reject a missing context clearly.
+- Business failure displays the exact stable error code.
+- CLI continues after both syntax and business errors.
+- Full scripted registration-to-settlement workflow.
+- Cancellation and grant scripts.
+- Scripted suspension, reinstatement, category publication, request, matching, proposal, selection, member-switching, and reporting workflows.
+- Balance shows ledger, held, and available separately.
+- First confirmation output says another confirmation is required.
+- Exit terminates without an exception.
+
+## Likely pitfalls
+
+- Duplicating eligibility or money rules to improve error messages.
+- Asking for member ID on every command instead of using the active context.
+- Treating active member selection as authentication.
+- Depending on random IDs in scripted tests.
+- Crashing the loop on one malformed input.
+- Printing mutable entity `toString()` output as a public format.
+- Calling managers directly around the coordinator.
+
+## Viva preparation
+
+Be ready to explain the parsing and domain-validation boundary, how scripted I/O tests work, why active-member context is not authentication, and how every Section 5 operation is reachable without the CLI owning business state.
+````
+
+</details>
+
+
+---
+
+<sub>22s</sub>
+
+### `view`
+
+**view the file at C:\\Users\\admin\\OneDrive - University College Dublin\\Documents\\School\\School Current\\COMP41670 Software Engineering\\Group Software Project\\group-handover\\09-cli-command-design.md.**
+
+`C:\Users\admin\OneDrive - University College Dublin\Documents\School\School Current\COMP41670 Software Engineering\Group Software Project\group-handover\09-cli-command-design.md`
+
+<details>
+<summary>108 lines</summary>
+
+````
+# Suggested CLI command design
+
+This is a concrete command vocabulary for Adbus to implement and the other owners to test against. The exact syntax may change during the CLI review, but every required operation must remain reachable.
+
+## Process-level commands
+
+```text
+help
+categories
+date
+advance-date <yyyy-mm-dd>
+register <name> <email>
+select-member <member-id>
+switch-member <member-id>
+show-member
+exit
+```
+
+Names with spaces need quoted-string parsing or an interactive prompt. Do not solve this by restricting valid names to one word.
+
+## Active-member commands
+
+```text
+publish-skill <category-id>
+raise-request <category-id> <minutes> <earliest-date> <latest-date>
+find-matches
+submit-proposal <request-id> <proposed-date>
+request-proposals <request-id>
+my-proposals
+reject-proposal <proposal-id>
+withdraw-proposal <proposal-id>
+select-proposal <proposal-id>
+confirm-completion <engagement-id>
+cancel-engagement <engagement-id>
+apply-grant <credits>
+balance
+ledger
+engagements
+report
+```
+
+Administrative suspension commands may use an explicit target member ID because the brief requires the operation but does not define an administrator identity:
+
+```text
+suspend-member <member-id>
+reinstate-member <member-id>
+```
+
+Document that this is a console administration operation, not authentication or authorization.
+
+## Parsing boundary
+
+The CLI may reject malformed syntax before calling the service:
+
+- Missing argument.
+- Invalid UUID or ID text.
+- Non-integer duration or credits.
+- Invalid ISO date text.
+- Unknown command.
+
+The service and managers still enforce:
+
+- Member existence and active status.
+- Email uniqueness.
+- Category validity.
+- Duration and window rules.
+- Self-match exclusion.
+- Proposal uniqueness.
+- Credit availability and levy.
+- Participant authorization.
+- Confirmation and cancellation state.
+- Grant eligibility.
+
+## Result presentation
+
+Use stable, actionable output:
+
+```text
+OK MEMBER_REGISTERED memberId=<id> balance=120
+ERROR DUPLICATE_EMAIL A member already uses that email.
+ERROR DUPLICATE_PROPOSAL This helper already has a pending proposal for that request.
+```
+
+Do not parse exception text or expose stack traces for ordinary business rejection. A technical exception can be logged separately while the user sees `ATOMIC_OPERATION_FAILED`.
+
+## Active-member behaviour
+
+- Commands that need a member fail clearly when no member is selected.
+- Successful `select-member` or `switch-member` stores the validated ID.
+- Failed switching retains the previous active member.
+- Suspension does not automatically clear the active ID. Later new-work commands fail through the service, while permitted existing-work commands remain available.
+- The active member ID exists only in the CLI process and is never stored in `MemberView`.
+
+## Suggested scripted happy path
+
+```text
+advance-date 2026-11-10
+register "Rita Requester" rita@example.com
+register "Hugh Helper" hugh@example.com
+switch-member <helper-id>
+publish-skill gardening
+switch-member <requester-id>
+raise-request gardening 60 2026-11-12 2026-11-15
+switch-member <helper-id>
+find-matches
+submit-proposal <request-id> 2026-11-14
+switch-member <requester-id>
+request-proposals <request-id>
+select-proposal <proposal-id>
+balance
+advance-date 2026-11-14
+confirm-completion <engagement-id>
+switch-member <helper-id>
+confirm-completion <engagement-id>
+balance
+ledger
+report
+exit
+```
+
+Use deterministic IDs in CLI integration tests so the script can refer to earlier records reliably.
+
+## CLI acceptance tests
+
+- Help lists every required operation.
+- Invalid command syntax does not terminate the process.
+- A service rejection prints its stable code and message.
+- A full script reaches successful settlement and report.
+- A script can switch between requester and helper in one process.
+- Balance output distinguishes ledger, held, and available values.
+- The first confirmation shows that the other participant is still required.
+- History output is read-only and does not expose internal object formatting as a contract.
+- Exit ends cleanly.
+````
+
+</details>
+
+
+---
+
+<sub>22s</sub>
+
+### `view`
+
+**view the file at C:\\Users\\admin\\OneDrive - University College Dublin\\Documents\\School\\School Current\\COMP41670 Software Engineering\\Group Software Project\\group-handover\\04-shared-contracts.md.**
+
+`C:\Users\admin\OneDrive - University College Dublin\Documents\School\School Current\COMP41670 Software Engineering\Group Software Project\group-handover\04-shared-contracts.md`
+
+<details>
+<summary>188 lines</summary>
+
+````
+# Shared contracts
+
+Freeze these meanings before parallel implementation. Method names may change once during skeleton creation, but inputs, outputs, ownership, atomicity, and rejection behaviour must not drift without a recorded amendment.
+
+## Common types
+
+Distinct IDs:
+
+- `MemberId`
+- `CategoryId`
+- `RequestId`
+- `ProposalId`
+- `EngagementId`
+- `TransactionId`
+
+Shared values:
+
+- `long` credits and balances.
+- `int` duration minutes from 1 to 480.
+- `LocalDate` for domain dates.
+- Canonical lowercase `EmailAddress` after trim and syntax validation.
+- Immutable records for all returned views.
+
+## Stable error codes
+
+```text
+NOT_FOUND
+INVALID_NAME
+INVALID_EMAIL
+DUPLICATE_EMAIL
+SUSPENDED_MEMBER
+INVALID_CATEGORY
+DUPLICATE_OFFER
+INVALID_WINDOW
+INVALID_DURATION
+SELF_MATCH
+REQUEST_CLOSED
+OUTSIDE_WINDOW
+DATE_IN_PAST
+DUPLICATE_PROPOSAL
+INVALID_STATE
+NOT_PARTICIPANT
+ALREADY_CONFIRMED
+INSUFFICIENT_AVAILABLE_CREDITS
+FUND_INSUFFICIENT
+GRANT_LIMIT_REACHED
+CANCELLATION_CLOSED
+ATOMIC_OPERATION_FAILED
+```
+
+Expected rejection returns a failure result and leaves state unchanged.
+
+## `MeithealService` public surface
+
+### Membership
+
+```java
+Result<MemberView> registerMember(String name, String email);
+Result<MemberView> findMemberByEmail(String email);
+Result<MemberView> getMember(MemberId memberId);
+Result<MemberView> suspendMember(MemberId memberId);
+Result<MemberView> reinstateMember(MemberId memberId);
+Result<MemberView> publishSkillOffer(MemberId memberId, CategoryId categoryId);
+List<CategoryView> categories();
+```
+
+Registration atomically creates an ACTIVE member and exactly one 120-credit welcome grant. Failure publishes neither. Suspension invalidates pending proposals involving the member, but preserves agreed engagements.
+
+### Requests and proposals
+
+```java
+Result<RequestView> raiseRequest(
+    MemberId requesterId,
+    CategoryId categoryId,
+    int durationMinutes,
+    LocalDate earliestDate,
+    LocalDate latestDate
+);
+
+Result<List<MatchCandidateView>> findMatchingRequests(MemberId helperId);
+Result<ProposalView> submitProposal(
+    MemberId helperId,
+    RequestId requestId,
+    LocalDate proposedDate
+);
+Result<List<ProposalView>> proposalsForRequest(
+    MemberId requesterId,
+    RequestId requestId
+);
+Result<List<ProposalView>> proposalsForHelper(MemberId helperId);
+Result<ProposalView> rejectProposal(
+    MemberId requesterId,
+    ProposalId proposalId
+);
+Result<ProposalView> withdrawProposal(
+    MemberId helperId,
+    ProposalId proposalId
+);
+```
+
+Matching is read-only. Submission creates one `PENDING` proposal only after eligibility, window, date, and uniqueness checks pass. There is no aggregate helper daily-hours limit or capacity reservation.
+
+### Agreement
+
+```java
+Result<EngagementView> selectProposal(
+    MemberId requesterId,
+    ProposalId proposalId
+);
+```
+
+Selection atomically:
+
+1. Revalidates the active requester and helper.
+2. Revalidates the open request, pending proposal, date, and category.
+3. Generates one engagement ID.
+4. Holds service payment plus levy without taking available balance below -180.
+5. Marks the chosen proposal `SELECTED`.
+6. Closes the request.
+7. Rejects competing pending proposals.
+8. Creates one `AGREED` engagement.
+
+Failure changes none of these records.
+
+### Completion
+
+```java
+Result<EngagementView> confirmCompletion(
+    EngagementId engagementId,
+    MemberId actorId
+);
+```
+
+Only the requester and helper may confirm on or after the engagement date. The first distinct confirmation records no transaction. The second distinct confirmation atomically settles the hold, writes the service-payment transaction and any positive levy transaction, records the actor, and completes the engagement. A technical failure records none of the second-confirmation effects and permits retry.
+
+### Cancellation
+
+```java
+Result<EngagementView> cancelEngagement(
+    EngagementId engagementId,
+    MemberId actorId
+);
+```
+
+Either participant may cancel only while `AGREED` and only when `today < engagementDate`. The immediately preceding calendar date is late. Success records the actor, date, and late flag, releases the hold, and writes no transaction.
+
+### Community grant
+
+```java
+Result<CommunityGrantView> applyForCommunityGrant(
+    MemberId memberId,
+    long amountCredits
+);
+```
+
+The amount must be positive. Eligibility uses actual ledger balance, which must be below zero. The fund must cover the amount. Under the approved rolling interpretation, the current date must be after `lastApprovedGrantDate.plusMonths(1)`. Rejection writes nothing and does not change the last grant date.
+
+### Queries and report
+
+```java
+Result<BalanceView> balance(MemberId memberId);
+Result<List<TransactionView>> ledgerHistory(MemberId memberId);
+Result<List<EngagementView>> engagementHistory(MemberId memberId);
+ReportView report();
+```
+
+`BalanceView` contains ledger balance, held total, and available balance. `ReportView` contains member total, fund balance, any approved initial-source amount, system total, expected total, and a conservation-pass flag.
+
+### Simulated date
+
+```java
+LocalDate currentDate();
+Result<LocalDate> advanceTo(LocalDate newDate);
+```
+
+The date starts on or after 1 September 2026 and never moves backward. Advancing it triggers no other operation.
+
+## Ledger ports
+
+Only `LedgerManager` changes financial state.
+
+```java
+Result<TransactionView> initializeCommunityFund(long initialCredits);
+Result<WelcomeGrantView> grantWelcome(MemberId memberId);
+
+Result<CreditHoldView> holdCredits(
+    EngagementId engagementId,
+    MemberId requesterId,
+    long amountCredits
+);
+
+Result<CreditHoldView> releaseCreditHold(EngagementId engagementId);
+
+Result<SettlementView> settleReservedEngagement(
+    EngagementId engagementId,
+    MemberId requesterId,
+    MemberId helperId,
+    int durationMinutes
+);
+```
+
+Port guarantees:
+
+- Initialization and welcome grant are idempotent by their natural keys.
+- One hold exists per engagement ID.
+- Releasing a hold never changes ledger balances.
+- Settlement recalculates payment and levy, verifies the exact held amount, writes the service-payment transaction plus a levy transaction when the levy is positive, and changes the hold to `SETTLED` atomically.
+- Consumers never calculate or mutate balances, levy, the fund, holds, or transactions independently.
+
+## Required views
+
+The skeleton should define at least:
+
+- `MemberView`
+- `CategoryView`
+- `RequestView`
+- `MatchCandidateView`
+- `ProposalView`
+- `EngagementView`
+- `CreditHoldView`
+- `TransactionView`
+- `BalanceView`
+- `CommunityGrantView`
+- `SettlementView`
+- `ReportView`
+
+Collection fields must be immutable copies. A view is a snapshot, not a reference to a mutable entity.
+
+## Contract acceptance checklist
+
+Each owner must answer yes before independent feature work:
+
+- I know which state my manager owns.
+- I know the public methods I provide.
+- I know the public methods I consume.
+- I know each error code I may return.
+- I know which methods must be idempotent.
+- I know which operations need cross-manager atomicity.
+- I have at least one rejection test that checks no state change.
+- I will not expose an internal collection or mutable entity.
+````
+
+</details>
+
+
+---
+
+<sub>22s</sub>
+
+### `view`
+
+**view the file at C:\\Users\\admin\\OneDrive - University College Dublin\\Documents\\School\\School Current\\COMP41670 Software Engineering\\Group Software Project\\group-handover\\README.md.**
+
+`C:\Users\admin\OneDrive - University College Dublin\Documents\School\School Current\COMP41670 Software Engineering\Group Software Project\group-handover\README.md`
+
+<details>
+<summary>96 lines</summary>
+
+```
+# Meitheal team handover - V2
+
+This folder is the self-contained implementation handover for the five-person COMP41670 Meitheal project. Share this folder as the team handover zip. It contains the agreed project baseline, ownership guidance, workflow rules, and personal evidence templates needed by the team.
+
+All implementation work happens directly in the shared `COMP41670-Excursions` repository. Do not use another repository for team implementation, staged transfers, branches, commits, pull requests, reviews, or merges.
+
+See [CHANGES.md](CHANGES.md) for a concise record of what changed in each distributed handover zip.
+
+## Current position
+
+As of 8 November 2026:
+
+- The project brief, domain design, 13-invariant baseline, shared contracts, and ownership proposal are included in this handover.
+- The shared implementation repository is `COMP41670-Excursions`.
+- Gradle is the required build system. Do not introduce Maven files or a second build system.
+- The deliverables are due Friday 20 November 2026 at 23:59.
+
+## Start here
+
+1. Read [Project and current state](01-project-and-current-state.md).
+2. Read [Architecture and implementation](02-architecture-and-implementation.md).
+3. Read [Invariants and traceability](03-invariants-and-traceability.md).
+4. Read [Shared contracts](04-shared-contracts.md) before creating a public Java method.
+5. Read the Git workflow below, then open your page under [People](people/README.md) and follow its first feature-branch plan.
+6. Use [Testing strategy](05-testing-strategy.md) and [Integration playbook](06-integration-playbook.md) for acceptance.
+7. Keep [Deliverables, report, and AI log](07-deliverables-report-and-ai-log.md) open throughout the project.
+8. Resolve the items in [Decisions, risks, and open items](08-decisions-risks-and-open-items.md) at the next team meeting.
+
+## Pick your page
+
+| Person | Ownership | Start page |
+| --- | --- | --- |
+| Joe Biju | Integration, shared contracts, build, clock, end-to-end verification | [Joe](people/joe.md) |
+| Moaz Refaei | Members, identity, status, registration, fixed category catalogue | [Moaz](people/moaz.md) |
+| Benjamin Long | Ledger, balances, holds, transactions, fund, reports | [Benjamin](people/benjamin.md) |
+| Matthew Gartland | Requests, proposals, engagements, and lifecycle state | [Matthew](people/matthew.md) |
+| Adbus Samad Bhadmus | CLI, input handling, command workflow, scripted CLI tests | [Adbus](people/adbus.md) |
+
+## Diagram index
+
+- [Component architecture](diagrams/architecture.md)
+- [Domain model and ownership](diagrams/domain-model.md)
+- [State machines](diagrams/state-machines.md)
+- [Core sequence flows](diagrams/sequence-flows.md)
+- [Credit flow and atomicity](diagrams/credit-and-atomicity.md)
+
+The design report should use one clear architecture diagram. The wider set here is for implementation and team handover.
+
+## Source hierarchy
+
+When two documents disagree, use this order:
+
+1. The issued project brief and any binding Brightspace clarification.
+2. The agreed design, invariants, contracts, decisions, diagrams, and ownership pages in this handover.
+3. Approved amendments recorded in [08 Decisions, risks, and open items](08-decisions-risks-and-open-items.md) and applied consistently to the shared implementation repository.
+4. The current implementation and documentation in `COMP41670-Excursions`, where it does not conflict with the project brief or an approved handover amendment.
+
+## V2 frozen implementation choices
+
+These choices apply unless a binding clarification requires an amendment:
+
+- Build: Gradle with Gradle Wrapper.
+- Package root: `ie.ucd.meitheal`.
+- Initial community fund: `0`. A non-zero external seed requires a binding clarification and a recorded amendment because it could create a third credit source under R3.
+- Public entry point: one `MeithealService` called by the CLI.
+- State: manager-owned in-memory collections for one process.
+- Time: one injected, forward-only `SimulatedClock` using `LocalDate`.
+
+- Settlement: record one positive service-payment transaction and record a community-levy transaction only when the calculated levy is positive.
+
+Record any required amendment before code diverges, including the rule, rationale, affected contracts, tests, diagrams, and owners.
+
+## Non-negotiable project rules
+
+- Java 21 and JUnit 5.
+- Console interface only. No web, GUI, authentication, database, container, cloud, or mobile scope.
+- Business rules are enforced in services and managers, never only in the CLI.
+- Credit values use whole-number `long` values. Durations use whole minutes.
+- Every cross-manager failure leaves all affected state unchanged.
+- Every invariant has an enforcement point and a test that fails when the check is removed.
+- Every member commits their own work under their own identity, using clear conventional commit prefixes. Commit messages must not mention Codex or other AI tools.
+- Every significant AI use is logged by the person who used it, including rejected output.
+
+## Fast implementation order
+
+1. Joe creates the Gradle skeleton, typed IDs, `Result<T>`, error codes, views, interfaces, clock, and composition root.
+2. Moaz and Benjamin complete the atomic registration vertical slice.
+3. Adbus exposes registration, member selection, balance, ledger, and report through the CLI.
+4. Moaz adds the fixed category catalogue and member skill publication; Matthew adds request creation against that catalogue.
+5. Matthew and Benjamin integrate proposal selection with a credit hold.
+6. Add two-party confirmation and atomic settlement.
+7. Add cancellation, suspension cleanup, community grants, immutable queries, and full reporting.
+8. Freeze features, run the invariant mutation checks, complete the report and AI log, and rehearse the viva.
+
+## What done means
+
+A feature is done only when its owner has provided production code, focused tests, boundary and no-state-change tests, immutable query output, a short handoff note, and any required AI-log entry. Cross-owner work is not done until the integration test passes through `MeithealService`.
+
+## Team Git workflow
+
+- Work only in `COMP41670-Excursions`.
+- Start each feature branch from the current `main`. A branch owns one small, working feature slice, not an entire subsystem.
+- Use names such as `feat/member-registration`, `fix/settlement-atomicity`, `docs/invariant-map`, `test/ledger-boundaries`, or `chore/gradle-config`. Never use names such as `codex`, `code-x`, or an AI tool name.
+- Make a small sequence of honest, buildable commits. Use concise conventional prefixes such as `feat:`, `fix:`, `test:`, `docs:`, `refactor:`, or `chore:`. A commit explains what changed and why; it must not claim work that was not done or mention the tool used to draft it.
+- Before merging, run the relevant tests and the full suite when shared contracts or integration code changed. Update the relevant handoff material and your own personal log files.
+- Open a pull request from the feature branch to `main` when the slice is ready. Its description must identify the owned feature, affected rules or contracts, tests run, no-state-change coverage where relevant, linked personal-log entry, known limitation, and next dependency. Peer review is recommended, especially for shared contracts and cross-owner changes, but is not a merge blocker. Joe approves merges as team coordinator.
+- Merge with a merge commit. Do not squash, rebase, rewrite, or collapse the feature commits. Preserve the visible history needed for contribution and viva evidence.
+- Announce the merged slice and any dependency or follow-up to the team before beginning the next feature branch.
+
+### Commit and branch quality
+
+- A branch should be narrow enough to describe in one sentence, such as "register a member atomically with the welcome grant". Do not use one branch for several unrelated features.
+- Prefer a sequence such as `feat: add canonical email value`, `feat: store members by canonical email`, and `test: cover duplicate registration atomicity` over one large catch-all commit.
+- Do not commit generated build output, IDE settings, credentials, copied dependencies, unrelated formatting, or another contributor's unfinished work.
+- Do not rewrite published history. If a correction is needed, make a new corrective commit that explains the reason.
+- Keep code, focused tests, and any required contract documentation in the same feature branch. Use a later documentation-only branch only for consolidation of already agreed personal evidence.
+- GitHub Actions, required status checks, and mandatory formal approvals are not part of this workflow. Local verification and a clear pull-request record are required.
+
+## Gradle initialisation handoff
+
+The first build owner must initialise Gradle directly in `COMP41670-Excursions`. The handover freezes the requirements below, but does not claim that the files already exist.
+
+- Add and commit the Gradle Wrapper and Gradle build configuration. Do not add Maven files.
+- Configure Java 21 and JUnit 5 for all relevant modules.
+- Establish the module layout in [Architecture and implementation](02-architecture-and-implementation.md), or record and obtain agreement for any necessary layout amendment before other owners begin work.
+- Ensure a clean checkout can run `./gradlew clean test` successfully. Document the verified build, test, and application-run commands in the public repository README.
+- Keep the initial build branch narrow: wrapper, settings, build logic, minimal application entry point or test wiring, and documentation. Do not silently add domain behaviour while establishing the build.
+- Add a short build handoff note in the Gradle pull request: Java version, modules, test command, run command, and any decision another owner must follow.
+
+## Personal documentation
+
+Each member has a separate folder under [logs](logs). Keep PR notes, implementation decisions, verification, and significant AI-use evidence in your own folder during development. This avoids edit conflicts. A later documentation-only cleanup commit can consolidate agreed evidence into the project report and supplied AI Usage Log spreadsheet.
+```
+
+</details>
+
+
+---
+
+<sub>27s</sub>
+
+### `glob`
+
+**C:\\Users\\admin\\OneDrive - University College Dublin\\Documents\\School\\School Current\\COMP41670 Software Engineering\\Group Software Project\\COMP41670-Excursions**
+
+`"**/*.java"`
+
+```
+C:\Users\admin\OneDrive - University College Dublin\Documents\School\School Current\COMP41670 Software Engineering\Group Software Project\COMP41670-Excursions\tests\src\test\java\ie\ucd\meitheal\GradleSetupTest.java
+```
+
+
+---
+
+<sub>27s</sub>
+
+### `glob`
+
+**C:\\Users\\admin\\OneDrive - University College Dublin\\Documents\\School\\School Current\\COMP41670 Software Engineering\\Group Software Project\\COMP41670-Excursions**
+
+`"**/*README*"`
+
+```
+C:\Users\admin\OneDrive - University College Dublin\Documents\School\School Current\COMP41670 Software Engineering\Group Software Project\COMP41670-Excursions\docs\logs\README.md
+C:\Users\admin\OneDrive - University College Dublin\Documents\School\School Current\COMP41670 Software Engineering\Group Software Project\COMP41670-Excursions\README.md
+```
+
+
+---
+
+<sub>26s</sub>
+
+### `view` — Failed
+
+**view the file at C:\\Users\\admin\\OneDrive - University College Dublin\\Documents\\School\\School Current\\COMP41670 Software Engineering\\Group Software Project\\COMP41670-Excursions\\.gitignore.**
+
+`C:\Users\admin\OneDrive - University College Dublin\Documents\School\School Current\COMP41670 Software Engineering\Group Software Project\COMP41670-Excursions\.gitignore`
+
+```
+Path does not exist
+```
+
+
+---
+
+<sub>53s</sub>
+
+### Copilot
+
+The repository has no existing CLI Java sources or root `.gitignore`; the requested slice can remain isolated to `cli`, README, and the new ignore file. I will add only parser/loop infrastructure and focused tests, with no domain contracts or service wiring.
+
+---
+
+<sub>55s</sub>
+
+### `apply_patch`
+
+<details>
+<summary>Arguments</summary>
+
+````json
+"*** Begin Patch\n*** Add File: C:\\Users\\admin\\OneDrive - University College Dublin\\Documents\\School\\School Current\\COMP41670 Software Engineering\\Group Software Project\\COMP41670-Excursions\\.gitignore\n+.gradle/\n+**/build/\n*** Update File: C:\\Users\\admin\\OneDrive - University College Dublin\\Documents\\School\\School Current\\COMP41670 Software Engineering\\Group Software Project\\COMP41670-Excursions\\cli\\build.gradle\n-// Configuration is inherited from the root project.\n+plugins {\n+    id 'application'\n+}\n+\n+application {\n+    mainClass = 'ie.ucd.meitheal.cli.Main'\n+}\n+\n+tasks.named('run') {\n+    standardInput = System.in\n+}\n*** Add File: C:\\Users\\admin\\OneDrive - University College Dublin\\Documents\\School\\School Current\\COMP41670 Software Engineering\\Group Software Project\\COMP41670-Excursions\\cli\\src\\main\\java\\ie\\ucd\\meitheal\\cli\\ParsedCommand.java\n+package ie.ucd.meitheal.cli;\n+\n+import java.util.List;\n+import java.util.Objects;\n+\n+/**\n+ * The syntax-only result of parsing one command line.\n+ */\n+public record ParsedCommand(String name, List<String> arguments) {\n+    public ParsedCommand {\n+        Objects.requireNonNull(name, \"name\");\n+        Objects.requireNonNull(arguments, \"arguments\");\n+        arguments = List.copyOf(arguments);\n+    }\n+}\n*** Add File: C:\\Users\\admin\\OneDrive - University College Dublin\\Documents\\School\\School Current\\COMP41670 Software Engineering\\Group Software Project\\COMP41670-Excursions\\cli\\src\\main\\java\\ie\\ucd\\meitheal\\cli\\CommandParser.java\n+package ie.ucd.meitheal.cli;\n+\n+import java.util.ArrayList;\n+import java.util.List;\n+\n+public final class CommandParser {\n+    public ParsedCommand parse(String line) {\n+        if (line == null) {\n+            throw new IllegalArgumentException(\"Command line must not be null.\");\n+        }\n+\n+        List<String> tokens = new ArrayList<>();\n+        StringBuilder token = new StringBuilder();\n+        boolean inQuotes = false;\n+        boolean tokenStarted = false;\n+\n+        for (int index = 0; index < line.length(); index++) {\n+            char current = line.charAt(index);\n+            if (inQuotes) {\n+                if (current == '\"') {\n+                    inQuotes = false;\n+                } else if (current == '\\\\') {\n+                    if (index + 1 >= line.length()) {\n+                        throw syntaxError(\"dangling escape in quoted argument\");\n+                    }\n+                    char escaped = line.charAt(++index);\n+                    if (escaped != '\"' && escaped != '\\\\') {\n+                        throw syntaxError(\"invalid escape '\\\\\" + escaped + \"' in quoted argument\");\n+                    }\n+                    token.append(escaped);\n+                } else {\n+                    token.append(current);\n+                }\n+                tokenStarted = true;\n+            } else if (Character.isWhitespace(current)) {\n+                if (tokenStarted) {\n+                    tokens.add(token.toString());\n+                    token.setLength(0);\n+                    tokenStarted = false;\n+                }\n+            } else if (current == '\"') {\n+                inQuotes = true;\n+                tokenStarted = true;\n+            } else {\n+                token.append(current);\n+                tokenStarted = true;\n+            }\n+        }\n+\n+        if (inQuotes) {\n+            throw syntaxError(\"unmatched double quote\");\n+        }\n+        if (tokenStarted) {\n+            tokens.add(token.toString());\n+        }\n+        if (tokens.isEmpty()) {\n+            throw syntaxError(\"missing command name\");\n+        }\n+\n+        return new ParsedCommand(tokens.get(0), tokens.subList(1, tokens.size()));\n+    }\n+\n+    private IllegalArgumentException syntaxError(String detail) {\n+        return new IllegalArgumentException(\"Invalid command syntax: \" + detail + \".\");\n+    }\n+}\n*** Add File: C:\\Users\\admin\\OneDrive - University College Dublin\\Documents\\School\\School Current\\COMP41670 Software Engineering\\Group Software Project\\COMP41670-Excursions\\cli\\src\\main\\java\\ie\\ucd\\meitheal\\cli\\MeithealCli.java\n+package ie.ucd.meitheal.cli;\n+\n+import java.io.BufferedReader;\n+import java.io.IOException;\n+import java.io.Reader;\n+import java.io.Writer;\n+import java.util.Objects;\n+\n+public final class MeithealCli {\n+    private final BufferedReader input;\n+    private final Writer output;\n+    private final CommandParser parser;\n+\n+    public MeithealCli(Reader input, Writer output) {\n+        this.input = new BufferedReader(Objects.requireNonNull(input, \"input\"));\n+        this.output = Objects.requireNonNull(output, \"output\");\n+        this.parser = new CommandParser();\n+    }\n+\n+    public void run() throws IOException {\n+        String line;\n+        while ((line = input.readLine()) != null) {\n+            if (line.isBlank()) {\n+                continue;\n+            }\n+\n+            try {\n+                ParsedCommand command = parser.parse(line);\n+                if (\"exit\".equals(command.name())) {\n+                    return;\n+                }\n+                if (\"help\".equals(command.name())) {\n+                    if (!command.arguments().isEmpty()) {\n+                        writeError(\"Command 'help' expects 0 arguments but got \"\n+                                + command.arguments().size() + \".\");\n+                    } else {\n+                        writeHelp();\n+                    }\n+                } else {\n+                    writeError(\"Unknown command '\" + command.name()\n+                            + \"'. Type 'help' for available commands.\");\n+                }\n+            } catch (IllegalArgumentException exception) {\n+                writeError(exception.getMessage());\n+            }\n+        }\n+    }\n+\n+    private void writeHelp() throws IOException {\n+        output.write(\"Supported commands:\\n\");\n+        output.write(\"  help - Show available commands.\\n\");\n+        output.write(\"  exit - Exit the CLI.\\n\");\n+        output.flush();\n+    }\n+\n+    private void writeError(String message) throws IOException {\n+        output.write(\"ERROR \" + message + \"\\n\");\n+        output.flush();\n+    }\n+}\n*** Add File: C:\\Users\\admin\\OneDrive - University College Dublin\\Documents\\School\\School Current\\COMP41670 Software Engineering\\Group Software Project\\COMP41670-Excursions\\cli\\src\\main\\java\\ie\\ucd\\meitheal\\cli\\Main.java\n+package ie.ucd.meitheal.cli;\n+\n+import java.io.InputStreamReader;\n+import java.io.OutputStreamWriter;\n+import java.nio.charset.StandardCharsets;\n+\n+public final class Main {\n+    private Main() {\n+    }\n+\n+    public static void main(String[] args) throws Exception {\n+        new MeithealCli(\n+                new InputStreamReader(System.in, StandardCharsets.UTF_8),\n+                new OutputStreamWriter(System.out, StandardCharsets.UTF_8))\n+                .run();\n+    }\n+}\n*** Add File: C:\\Users\\admin\\OneDrive - University College Dublin\\Documents\\School\\School Current\\COMP41670 Software Engineering\\Group Software Project\\COMP41670-Excursions\\cli\\src\\test\\java\\ie\\ucd\\meitheal\\cli\\CommandParserTest.java\n+package ie.ucd.meitheal.cli;\n+\n+import static org.junit.jupiter.api.Assertions.assertEquals;\n+import static org.junit.jupiter.api.Assertions.assertThrows;\n+\n+import java.util.List;\n+import org.junit.jupiter.api.Test;\n+\n+class CommandParserTest {\n+    private final CommandParser parser = new CommandParser();\n+\n+    @Test\n+    void parsesWhitespaceAndPreservesArgumentContent() {\n+        ParsedCommand command = parser.parse(\"  register   \\\"Rita Requester\\\"  Rita@Example.COM  \");\n+\n+        assertEquals(\"register\", command.name());\n+        assertEquals(List.of(\"Rita Requester\", \"Rita@Example.COM\"), command.arguments());\n+    }\n+\n+    @Test\n+    void parsesEmptyAndEscapedQuotedArguments() {\n+        ParsedCommand command = parser.parse(\"command \\\"\\\" \\\"say \\\\\\\"hi\\\\\\\" and \\\\\\\\path\\\"\");\n+\n+        assertEquals(List.of(\"\", \"say \\\"hi\\\" and \\\\path\"), command.arguments());\n+    }\n+\n+    @Test\n+    void parsedArgumentsCannotBeMutated() {\n+        ParsedCommand command = parser.parse(\"help\");\n+\n+        assertThrows(UnsupportedOperationException.class,\n+                () -> command.arguments().add(\"unexpected\"));\n+    }\n+\n+    @Test\n+    void rejectsUnmatchedQuotes() {\n+        IllegalArgumentException error = assertThrows(IllegalArgumentException.class,\n+                () -> parser.parse(\"register \\\"unfinished\"));\n+\n+        assertEquals(\"Invalid command syntax: unmatched double quote.\", error.getMessage());\n+    }\n+\n+    @Test\n+    void rejectsInvalidAndDanglingEscapes() {\n+        IllegalArgumentException invalid = assertThrows(IllegalArgumentException.class,\n+                () -> parser.parse(\"command \\\"bad\\\\n\\\"\"));\n+        IllegalArgumentException dangling = assertThrows(IllegalArgumentException.class,\n+                () -> parser.parse(\"command \\\"bad\\\\\"));\n+\n+        assertEquals(\"Invalid command syntax: invalid escape '\\\\n' in quoted argument.\",\n+                invalid.getMessage());\n+        assertEquals(\"Invalid command syntax: dangling escape in quoted argument.\",\n+                dangling.getMessage());\n+    }\n+}\n*** Add File: C:\\Users\\admin\\OneDrive - University College Dublin\\Documents\\School\\School Current\\COMP41670 Software Engineering\\Group Software Project\\COMP41670-Excursions\\cli\\src\\test\\java\\ie\\ucd\\meitheal\\cli\\MeithealCliTest.java\n+package ie.ucd.meitheal.cli;\n+\n+import static org.junit.jupiter.api.Assertions.assertEquals;\n+\n+import java.io.StringReader;\n+import java.io.StringWriter;\n+import org.junit.jupiter.api.Test;\n+\n+class MeithealCliTest {\n+    @Test\n+    void scriptedErrorsAndBlankLinesContinueToValidCommands() throws Exception {\n+        StringWriter output = new StringWriter();\n+\n+        new MeithealCli(new StringReader(\n+                \"\\nunknown\\nhelp extra\\nhelp \\\"unfinished\\nhelp\\n\"), output).run();\n+\n+        assertEquals(\"\"\"\n+                ERROR Unknown command 'unknown'. Type 'help' for available commands.\n+                ERROR Command 'help' expects 0 arguments but got 1.\n+                ERROR Invalid command syntax: unmatched double quote.\n+                Supported commands:\n+                  help - Show available commands.\n+                  exit - Exit the CLI.\n+                \"\"\", output.toString());\n+    }\n+\n+    @Test\n+    void exitStopsProcessingSubsequentInput() throws Exception {\n+        StringWriter output = new StringWriter();\n+\n+        new MeithealCli(new StringReader(\"help\\nexit\\nhelp\\nunknown\\n\"), output).run();\n+\n+        assertEquals(\"\"\"\n+                Supported commands:\n+                  help - Show available commands.\n+                  exit - Exit the CLI.\n+                \"\"\", output.toString());\n+    }\n+\n+    @Test\n+    void eofTerminatesWithoutOutput() throws Exception {\n+        StringWriter output = new StringWriter();\n+\n+        new MeithealCli(new StringReader(\"\"), output).run();\n+\n+        assertEquals(\"\", output.toString());\n+    }\n+}\n*** Update File: C:\\Users\\admin\\OneDrive - University College Dublin\\Documents\\School\\School Current\\COMP41670 Software Engineering\\Group Software Project\\COMP41670-Excursions\\README.md\n@@\n-For the console application, the run command requires user verification: no application main class or Gradle `run` task is currently configured, so the command cannot be determined. Use the verified command in place of `<console-run-command>` once available.\n+The initial console CLI supports `help` and `exit`:\n+\n+```bash\n+.\\gradlew.bat :cli:run\n+```\n+\n+Commands are separated by whitespace. Arguments can be enclosed in double quotes\n+to preserve spaces, including empty quoted arguments (`\"\"`). Inside quoted\n+arguments, use `\\\"` for a double quote and `\\\\` for a backslash. An unmatched\n+double quote or any other/dangling escape is a syntax error. The initial CLI\n+does not yet connect to domain services.\n*** End Patch\n"
+````
+
+</details>
+
+```
+Added 7 file(s): C:\Users\admin\OneDrive - University College Dublin\Documents\School\School Current\COMP41670 Software Engineering\Group Software Project\COMP41670-Excursions\.gitignore, C:\Users\admin\OneDrive - University College Dublin\Documents\School\School Current\COMP41670 Software Engineering\Group Software Project\COMP41670-Excursions\cli\src\main\java\ie\ucd\meitheal\cli\ParsedCommand.java, C:\Users\admin\OneDrive - University College Dublin\Documents\School\School Current\COMP41670 Software Engineering\Group Software Project\COMP41670-Excursions\cli\src\main\java\ie\ucd\meitheal\cli\CommandParser.java, C:\Users\admin\OneDrive - University College Dublin\Documents\School\School Current\COMP41670 Software Engineering\Group Software Project\COMP41670-Excursions\cli\src\main\java\ie\ucd\meitheal\cli\MeithealCli.java, C:\Users\admin\OneDrive - University College Dublin\Documents\School\School Current\COMP41670 Software Engineering\Group Software Project\COMP41670-Excursions\cli\src\main\java\ie\ucd\meitheal\cli\Main.java, C:\Users\admin\OneDrive - University College Dublin\Documents\School\School Current\COMP41670 Software Engineering\Group Software Project\COMP41670-Excursions\cli\src\test\java\ie\ucd\meitheal\cli\CommandParserTest.java, C:\Users\admin\OneDrive - University College Dublin\Documents\School\School Current\COMP41670 Software Engineering\Group Software Project\COMP41670-Excursions\cli\src\test\java\ie\ucd\meitheal\cli\MeithealCliTest.java
+Modified 2 file(s): C:\Users\admin\OneDrive - University College Dublin\Documents\School\School Current\COMP41670 Software Engineering\Group Software Project\COMP41670-Excursions\cli\build.gradle, C:\Users\admin\OneDrive - University College Dublin\Documents\School\School Current\COMP41670 Software Engineering\Group Software Project\COMP41670-Excursions\README.md
+```
+
+
+---
+
+<sub>1m 1s</sub>
+
+### `view`
+
+**view the file at C:\\Users\\admin\\OneDrive - University College Dublin\\Documents\\School\\School Current\\COMP41670 Software Engineering\\Group Software Project\\COMP41670-Excursions\\cli\\src\\test\\java\\ie\\ucd\\meitheal\\cli\\CommandParserTest.java.**
+
+`C:\Users\admin\OneDrive - University College Dublin\Documents\School\School Current\COMP41670 Software Engineering\Group Software Project\COMP41670-Excursions\cli\src\test\java\ie\ucd\meitheal\cli\CommandParserTest.java`
+
+<details>
+<summary>42 lines</summary>
+
+```
+package ie.ucd.meitheal.cli;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+
+import java.util.List;
+import org.junit.jupiter.api.Test;
+
+class CommandParserTest {
+    private final CommandParser parser = new CommandParser();
+
+    @Test
+    void parsesWhitespaceAndPreservesArgumentContent() {
+        ParsedCommand command = parser.parse("  register   \"Rita Requester\"  Rita@Example.COM  ");
+
+        assertEquals("register", command.name());
+        assertEquals(List.of("Rita Requester", "Rita@Example.COM"), command.arguments());
+    }
+
+    @Test
+    void parsesEmptyAndEscapedQuotedArguments() {
+        ParsedCommand command = parser.parse("command \"\" \"say \\\"hi\\\" and \\\\path\"");
+
+        assertEquals(List.of("", "say \"hi\" and \\path"), command.arguments());
+    }
+
+    @Test
+    void parsedArgumentsCannotBeMutated() {
+        ParsedCommand command = parser.parse("help");
+
+        assertThrows(UnsupportedOperationException.class,
+                () -> command.arguments().add("unexpected"));
+    }
+
+    @Test
+    void rejectsUnmatchedQuotes() {
+        IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
+                () -> parser.parse("register \"unfinished"));
+
+        assertEquals("Invalid command syntax: unmatched double quote.", error.getMessage());
+    }
+
+    @Test
+    void rejectsInvalidAndDanglingEscapes() {
+        IllegalArgumentException invalid = assertThrows(IllegalArgumentException.class,
+                () -> parser.parse("command \"bad\\n\""));
+        IllegalArgumentException dangling = assertThrows(IllegalArgumentException.class,
+                () -> parser.parse("command \"bad\\"));
+
+        assertEquals("Invalid command syntax: invalid escape '\\n' in quoted argument.",
+                invalid.getMessage());
+        assertEquals("Invalid command syntax: dangling escape in quoted argument.",
+                dangling.getMessage());
+    }
+}
+```
+
+</details>
+
+
+---
+
+<sub>1m 1s</sub>
+
+### `view`
+
+**view the file at C:\\Users\\admin\\OneDrive - University College Dublin\\Documents\\School\\School Current\\COMP41670 Software Engineering\\Group Software Project\\COMP41670-Excursions\\cli\\src\\test\\java\\ie\\ucd\\meitheal\\cli\\MeithealCliTest.java.**
+
+`C:\Users\admin\OneDrive - University College Dublin\Documents\School\School Current\COMP41670 Software Engineering\Group Software Project\COMP41670-Excursions\cli\src\test\java\ie\ucd\meitheal\cli\MeithealCliTest.java`
+
+<details>
+<summary>37 lines</summary>
+
+```
+package ie.ucd.meitheal.cli;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
+import java.io.StringReader;
+import java.io.StringWriter;
+import org.junit.jupiter.api.Test;
+
+class MeithealCliTest {
+    @Test
+    void scriptedErrorsAndBlankLinesContinueToValidCommands() throws Exception {
+        StringWriter output = new StringWriter();
+
+        new MeithealCli(new StringReader(
+                "\nunknown\nhelp extra\nhelp \"unfinished\nhelp\n"), output).run();
+
+        assertEquals("""
+                ERROR Unknown command 'unknown'. Type 'help' for available commands.
+                ERROR Command 'help' expects 0 arguments but got 1.
+                ERROR Invalid command syntax: unmatched double quote.
+                Supported commands:
+                  help - Show available commands.
+                  exit - Exit the CLI.
+                """, output.toString());
+    }
+
+    @Test
+    void exitStopsProcessingSubsequentInput() throws Exception {
+        StringWriter output = new StringWriter();
+
+        new MeithealCli(new StringReader("help\nexit\nhelp\nunknown\n"), output).run();
+
+        assertEquals("""
+                Supported commands:
+                  help - Show available commands.
+                  exit - Exit the CLI.
+                """, output.toString());
+    }
+
+    @Test
+    void eofTerminatesWithoutOutput() throws Exception {
+        StringWriter output = new StringWriter();
+
+        new MeithealCli(new StringReader(""), output).run();
+
+        assertEquals("", output.toString());
+    }
+}
+```
+
+</details>
+
+
+---
+
+<sub>1m 1s</sub>
+
+### `view`
+
+**view the file at C:\\Users\\admin\\OneDrive - University College Dublin\\Documents\\School\\School Current\\COMP41670 Software Engineering\\Group Software Project\\COMP41670-Excursions\\cli\\src\\main\\java\\ie\\ucd\\meitheal\\cli\\CommandParser.java.**
+
+`C:\Users\admin\OneDrive - University College Dublin\Documents\School\School Current\COMP41670 Software Engineering\Group Software Project\COMP41670-Excursions\cli\src\main\java\ie\ucd\meitheal\cli\CommandParser.java`
+
+<details>
+<summary>59 lines</summary>
+
+```
+package ie.ucd.meitheal.cli;
+
+import java.util.ArrayList;
+import java.util.List;
+
+public final class CommandParser {
+    public ParsedCommand parse(String line) {
+        if (line == null) {
+            throw new IllegalArgumentException("Command line must not be null.");
+        }
+
+        List<String> tokens = new ArrayList<>();
+        StringBuilder token = new StringBuilder();
+        boolean inQuotes = false;
+        boolean tokenStarted = false;
+
+        for (int index = 0; index < line.length(); index++) {
+            char current = line.charAt(index);
+            if (inQuotes) {
+                if (current == '"') {
+                    inQuotes = false;
+                } else if (current == '\\') {
+                    if (index + 1 >= line.length()) {
+                        throw syntaxError("dangling escape in quoted argument");
+                    }
+                    char escaped = line.charAt(++index);
+                    if (escaped != '"' && escaped != '\\') {
+                        throw syntaxError("invalid escape '\\" + escaped + "' in quoted argument");
+                    }
+                    token.append(escaped);
+                } else {
+                    token.append(current);
+                }
+                tokenStarted = true;
+            } else if (Character.isWhitespace(current)) {
+                if (tokenStarted) {
+                    tokens.add(token.toString());
+                    token.setLength(0);
+                    tokenStarted = false;
+                }
+            } else if (current == '"') {
+                inQuotes = true;
+                tokenStarted = true;
+            } else {
+                token.append(current);
+                tokenStarted = true;
+            }
+        }
+
+        if (inQuotes) {
+            throw syntaxError("unmatched double quote");
+        }
+        if (tokenStarted) {
+            tokens.add(token.toString());
+        }
+        if (tokens.isEmpty()) {
+            throw syntaxError("missing command name");
+        }
+
+        return new ParsedCommand(tokens.get(0), tokens.subList(1, tokens.size()));
+    }
+
+    private IllegalArgumentException syntaxError(String detail) {
+        return new IllegalArgumentException("Invalid command syntax: " + detail + ".");
+    }
+}
+```
+
+</details>
+
+
+---
+
+<sub>1m 1s</sub>
+
+### `view`
+
+**view the file at C:\\Users\\admin\\OneDrive - University College Dublin\\Documents\\School\\School Current\\COMP41670 Software Engineering\\Group Software Project\\COMP41670-Excursions\\README.md.**
+
+`C:\Users\admin\OneDrive - University College Dublin\Documents\School\School Current\COMP41670 Software Engineering\Group Software Project\COMP41670-Excursions\README.md`
+
+<details>
+<summary>16 lines</summary>
+
+````
+# Group 1 - Excursions
+
+Moaz Refaei, Benjamin Long, Joe Biju, Matthew Gartland, Abdus Samad Bhadmus
+
+## Setup
+
+Install a Java 21 JDK and use the included Gradle Wrapper (`./gradlew` on macOS/Linux or `gradlew.bat` on Windows):
+
+```bash
+./gradlew clean build test
+```
+
+The initial console CLI supports `help` and `exit`:
+
+```bash
+.\gradlew.bat :cli:run
+```
+
+Commands are separated by whitespace. Arguments can be enclosed in double quotes
+to preserve spaces, including empty quoted arguments (`""`). Inside quoted
+arguments, use `\"` for a double quote and `\\` for a backslash. An unmatched
+double quote or any other/dangling escape is a syntax error. The initial CLI
+does not yet connect to domain services.
+````
+
+</details>
+
+
+---
+
+<sub>1m 8s</sub>
+
+### `apply_patch`
+
+<details>
+<summary>Arguments</summary>
+
+```json
+"*** Begin Patch\n*** Update File: C:\\Users\\admin\\OneDrive - University College Dublin\\Documents\\School\\School Current\\COMP41670 Software Engineering\\Group Software Project\\COMP41670-Excursions\\cli\\src\\main\\java\\ie\\ucd\\meitheal\\cli\\MeithealCli.java\n@@\n                 ParsedCommand command = parser.parse(line);\n                 if (\"exit\".equals(command.name())) {\n-                    return;\n-                }\n-                if (\"help\".equals(command.name())) {\n-                    if (!command.arguments().isEmpty()) {\n-                        writeError(\"Command 'help' expects 0 arguments but got \"\n-                                + command.arguments().size() + \".\");\n+                    if (command.arguments().isEmpty()) {\n+                        return;\n                     } else {\n-                        writeHelp();\n+                        writeArgumentCountError(command);\n                     }\n+                } else if (\"help\".equals(command.name())) {\n+                    if (command.arguments().isEmpty()) {\n+                        writeHelp();\n+                    } else {\n+                        writeArgumentCountError(command);\n+                    }\n                 } else {\n                     writeError(\"Unknown command '\" + command.name()\n                             + \"'. Type 'help' for available commands.\");\n@@\n         }\n     }\n \n+    private void writeArgumentCountError(ParsedCommand command) throws IOException {\n+        writeError(\"Command '\" + command.name() + \"' expects 0 arguments but got \"\n+                + command.arguments().size() + \".\");\n+    }\n+\n*** Update File: C:\\Users\\admin\\OneDrive - University College Dublin\\Documents\\School\\School Current\\COMP41670 Software Engineering\\Group Software Project\\COMP41670-Excursions\\cli\\src\\test\\java\\ie\\ucd\\meitheal\\cli\\MeithealCliTest.java\n@@\n                 \"\\nunknown\\nhelp extra\\nhelp \\\"unfinished\\nhelp\\n\"), output).run();\n@@\n                 \"\"\", output.toString());\n     }\n \n+    @Test\n+    void wrongExitArgumentCountAllowsTheNextCommand() throws Exception {\n+        StringWriter output = new StringWriter();\n+\n+        new MeithealCli(new StringReader(\"exit now\\nhelp\\nexit\\n\"), output).run();\n+\n+        assertEquals(\"\"\"\n+                ERROR Command 'exit' expects 0 arguments but got 1.\n+                Supported commands:\n+                  help - Show available commands.\n+                  exit - Exit the CLI.\n+                \"\"\", output.toString());\n+    }\n+\n*** End Patch\n"
+```
+
+</details>
+
+```
+Modified 2 file(s): C:\Users\admin\OneDrive - University College Dublin\Documents\School\School Current\COMP41670 Software Engineering\Group Software Project\COMP41670-Excursions\cli\src\main\java\ie\ucd\meitheal\cli\MeithealCli.java, C:\Users\admin\OneDrive - University College Dublin\Documents\School\School Current\COMP41670 Software Engineering\Group Software Project\COMP41670-Excursions\cli\src\test\java\ie\ucd\meitheal\cli\MeithealCliTest.java
+```
+
+
+---
+
+<sub>1m 15s</sub>
+
+### `view`
+
+**view the file at C:\\Users\\admin\\OneDrive - University College Dublin\\Documents\\School\\School Current\\COMP41670 Software Engineering\\Group Software Project\\COMP41670-Excursions\\cli\\src\\main\\java\\ie\\ucd\\meitheal\\cli\\MeithealCli.java.**
+
+`C:\Users\admin\OneDrive - University College Dublin\Documents\School\School Current\COMP41670 Software Engineering\Group Software Project\COMP41670-Excursions\cli\src\main\java\ie\ucd\meitheal\cli\MeithealCli.java`
+
+<details>
+<summary>59 lines</summary>
+
+```
+package ie.ucd.meitheal.cli;
+
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.Reader;
+import java.io.Writer;
+import java.util.Objects;
+
+public final class MeithealCli {
+    private final BufferedReader input;
+    private final Writer output;
+    private final CommandParser parser;
+
+    public MeithealCli(Reader input, Writer output) {
+        this.input = new BufferedReader(Objects.requireNonNull(input, "input"));
+        this.output = Objects.requireNonNull(output, "output");
+        this.parser = new CommandParser();
+    }
+
+    public void run() throws IOException {
+        String line;
+        while ((line = input.readLine()) != null) {
+            if (line.isBlank()) {
+                continue;
+            }
+
+            try {
+                ParsedCommand command = parser.parse(line);
+                if ("exit".equals(command.name())) {
+                    if (command.arguments().isEmpty()) {
+                        return;
+                    } else {
+                        writeArgumentCountError(command);
+                    }
+                } else if ("help".equals(command.name())) {
+                    if (command.arguments().isEmpty()) {
+                        writeHelp();
+                    } else {
+                        writeArgumentCountError(command);
+                    }
+                } else {
+                    writeError("Unknown command '" + command.name()
+                            + "'. Type 'help' for available commands.");
+                }
+            } catch (IllegalArgumentException exception) {
+                writeError(exception.getMessage());
+            }
+        }
+    }
+
+    private void writeArgumentCountError(ParsedCommand command) throws IOException {
+        writeError("Command '" + command.name() + "' expects 0 arguments but got "
+                + command.arguments().size() + ".");
+    }
+
+    private void writeHelp() throws IOException {
+        output.write("Supported commands:\n");
+        output.write("  help - Show available commands.\n");
+        output.write("  exit - Exit the CLI.\n");
+        output.flush();
+    }
+
+    private void writeError(String message) throws IOException {
+        output.write("ERROR " + message + "\n");
+        output.flush();
+    }
+}
+```
+
+</details>
+
+
+---
+
+<sub>1m 15s</sub>
+
+### `view`
+
+**view the file at C:\\Users\\admin\\OneDrive - University College Dublin\\Documents\\School\\School Current\\COMP41670 Software Engineering\\Group Software Project\\COMP41670-Excursions\\cli\\build.gradle.**
+
+`C:\Users\admin\OneDrive - University College Dublin\Documents\School\School Current\COMP41670 Software Engineering\Group Software Project\COMP41670-Excursions\cli\build.gradle`
+
+<details>
+<summary>9 lines</summary>
+
+```
+plugins {
+    id 'application'
+}
+
+application {
+    mainClass = 'ie.ucd.meitheal.cli.Main'
+}
+
+tasks.named('run') {
+    standardInput = System.in
+}
+```
+
+</details>
+
+
+---
+
+<sub>1m 15s</sub>
+
+### `view`
+
+**view the file at C:\\Users\\admin\\OneDrive - University College Dublin\\Documents\\School\\School Current\\COMP41670 Software Engineering\\Group Software Project\\COMP41670-Excursions\\.gitignore.**
+
+`C:\Users\admin\OneDrive - University College Dublin\Documents\School\School Current\COMP41670 Software Engineering\Group Software Project\COMP41670-Excursions\.gitignore`
+
+```
+.gradle/
+**/build/
+
+```
+
+
+---
+
+<sub>1m 15s</sub>
+
+### `view`
+
+**view the file at C:\\Users\\admin\\OneDrive - University College Dublin\\Documents\\School\\School Current\\COMP41670 Software Engineering\\Group Software Project\\COMP41670-Excursions\\cli\\src\\main\\java\\ie\\ucd\\meitheal\\cli\\ParsedCommand.java.**
+
+`C:\Users\admin\OneDrive - University College Dublin\Documents\School\School Current\COMP41670 Software Engineering\Group Software Project\COMP41670-Excursions\cli\src\main\java\ie\ucd\meitheal\cli\ParsedCommand.java`
+
+<details>
+<summary>13 lines</summary>
+
+```
+package ie.ucd.meitheal.cli;
+
+import java.util.List;
+import java.util.Objects;
+
+/**
+ * The syntax-only result of parsing one command line.
+ */
+public record ParsedCommand(String name, List<String> arguments) {
+    public ParsedCommand {
+        Objects.requireNonNull(name, "name");
+        Objects.requireNonNull(arguments, "arguments");
+        arguments = List.copyOf(arguments);
+    }
+}
+```
+
+</details>
+
+
+---
+
+<sub>1m 15s</sub>
+
+### `view`
+
+**view the file at C:\\Users\\admin\\OneDrive - University College Dublin\\Documents\\School\\School Current\\COMP41670 Software Engineering\\Group Software Project\\COMP41670-Excursions\\cli\\src\\test\\java\\ie\\ucd\\meitheal\\cli\\MeithealCliTest.java.**
+
+`C:\Users\admin\OneDrive - University College Dublin\Documents\School\School Current\COMP41670 Software Engineering\Group Software Project\COMP41670-Excursions\cli\src\test\java\ie\ucd\meitheal\cli\MeithealCliTest.java`
+
+<details>
+<summary>48 lines</summary>
+
+```
+package ie.ucd.meitheal.cli;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
+import java.io.StringReader;
+import java.io.StringWriter;
+import org.junit.jupiter.api.Test;
+
+class MeithealCliTest {
+    @Test
+    void scriptedErrorsAndBlankLinesContinueToValidCommands() throws Exception {
+        StringWriter output = new StringWriter();
+
+        new MeithealCli(new StringReader(
+                "\nunknown\nhelp extra\nhelp \"unfinished\nhelp\n"), output).run();
+
+        assertEquals("""
+                ERROR Unknown command 'unknown'. Type 'help' for available commands.
+                ERROR Command 'help' expects 0 arguments but got 1.
+                ERROR Invalid command syntax: unmatched double quote.
+                Supported commands:
+                  help - Show available commands.
+                  exit - Exit the CLI.
+                """, output.toString());
+    }
+
+    @Test
+    void wrongExitArgumentCountAllowsTheNextCommand() throws Exception {
+        StringWriter output = new StringWriter();
+
+        new MeithealCli(new StringReader("exit now\nhelp\nexit\n"), output).run();
+
+        assertEquals("""
+                ERROR Command 'exit' expects 0 arguments but got 1.
+                Supported commands:
+                  help - Show available commands.
+                  exit - Exit the CLI.
+                """, output.toString());
+    }
+
+    @Test
+    void exitStopsProcessingSubsequentInput() throws Exception {
+        StringWriter output = new StringWriter();
+
+        new MeithealCli(new StringReader("help\nexit\nhelp\nunknown\n"), output).run();
+
+        assertEquals("""
+                Supported commands:
+                  help - Show available commands.
+                  exit - Exit the CLI.
+                """, output.toString());
+    }
+
+    @Test
+    void eofTerminatesWithoutOutput() throws Exception {
+        StringWriter output = new StringWriter();
+
+        new MeithealCli(new StringReader(""), output).run();
+
+        assertEquals("", output.toString());
+    }
+}
+```
+
+</details>
+
+
+---
+
+<sub>1m 22s</sub>
+
+### Copilot
+
+Implemented the initial CLI slice without committing, staging, or running tests.
+
+- Added immutable `ParsedCommand`, `CommandParser`, injected-I/O `MeithealCli`, and standalone `Main`.
+- Supported commands: `help` and `exit`; errors continue processing, exit stops input, EOF terminates.
+- Parser supports whitespace, quoted/empty arguments, `\"`, and `\\`; unmatched quotes and invalid/dangling escapes are deterministic errors.
+- Added focused JUnit 5 parser and CLI tests.
+- Configured `:cli:run` and standard input in `cli/build.gradle`.
+- Updated README and added root `.gitignore`.
+- No domain/service types, business logic, or logs were added or changed.
+
+Tests were not run, per instruction.
+
+---
+
+<sub>Generated by [GitHub Copilot CLI](https://github.com/features/copilot/cli)</sub>

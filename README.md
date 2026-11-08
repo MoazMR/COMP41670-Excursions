@@ -10,4 +10,16 @@ Install a Java 21 JDK and use the included Gradle Wrapper (`./gradlew` on macOS/
 ./gradlew clean build test
 ```
 
-For the console application, the run command requires user verification: no application main class or Gradle `run` task is currently configured, so the command cannot be determined. Use the verified command in place of `<console-run-command>` once available.
+The library-level CLI supports `help` and `exit`. Commands are separated by
+whitespace. Arguments can be enclosed in double quotes to preserve spaces,
+including empty quoted arguments (`""`). Inside quoted arguments, use `\"` for
+a double quote and `\\` for a backslash. An unmatched double quote or any
+other/dangling escape is a syntax error.
+
+The focused CLI test command is:
+
+```text
+.\gradlew.bat :cli:test
+```
+
+Application startup wiring is owned by the shared foundation.
