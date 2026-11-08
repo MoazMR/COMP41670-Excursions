@@ -41,6 +41,11 @@ public final class CommandParser {
             }
         }
 
+        return finishCommand(tokens, token, inQuotes, tokenStarted);
+    }
+
+    private ParsedCommand finishCommand(
+            List<String> tokens, StringBuilder token, boolean inQuotes, boolean tokenStarted) {
         if (inQuotes) {
             throw syntaxError("unmatched double quote");
         }
