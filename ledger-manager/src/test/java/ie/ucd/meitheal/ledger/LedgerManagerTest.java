@@ -76,6 +76,11 @@ class LedgerManagerTest {
     }
 
     @Test
+    void noPublicZeroArgumentConstructor() {
+        assertThrows(NoSuchMethodException.class, () -> LedgerManager.class.getConstructor());
+    }
+
+    @Test
     void duplicateGeneratedTransactionIdIsRejectedWithoutPartialState() {
         LedgerManager ledger = ledger("same-id", "same-id");
         ledger.grantWelcome(ALICE);

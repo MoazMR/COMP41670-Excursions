@@ -20,10 +20,6 @@ public final class LedgerManager {
     private final List<Transaction> transactions = new ArrayList<>();
     private final Set<TransactionId> transactionIds = new HashSet<>();
 
-    public LedgerManager() {
-        this(TransactionIdGenerator::random, LocalDate::now);
-    }
-
     public LedgerManager(
             Supplier<TransactionId> transactionIdGenerator,
             Supplier<LocalDate> dateGenerator) {
@@ -93,14 +89,5 @@ public final class LedgerManager {
 
     public synchronized List<Transaction> transactions() {
         return history();
-    }
-
-    private static final class TransactionIdGenerator {
-        private TransactionIdGenerator() {
-        }
-
-        private static TransactionId random() {
-            return new TransactionId(java.util.UUID.randomUUID().toString());
-        }
     }
 }
