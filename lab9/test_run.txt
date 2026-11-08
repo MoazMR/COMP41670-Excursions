@@ -1,0 +1,25 @@
+Lab 9 final verification
+Date: 2026-11-08
+Branch: refactor/benjamin-ledger-welcome-grant
+Verified code commit: 9ca7f58
+
+Focused command:
+./gradlew :ledger-manager:test --rerun-tasks --no-daemon
+
+Result: BUILD SUCCESSFUL
+LedgerManagerTest: 13 tests, 0 failures, 0 errors, 0 skipped
+LedgerManagerGrantWelcomeCharacterizationTest: 5 tests, 0 failures, 0 errors, 0 skipped
+Focused total: 18 tests passed
+
+Full command:
+./gradlew test --rerun-tasks --no-daemon
+
+Result: BUILD SUCCESSFUL
+Tasks: 10 actionable tasks, 10 executed
+Ledger tests: 18 passed
+GradleSetupTest: 1 passed
+Repository total: 19 tests passed, 0 failures, 0 errors, 0 skipped
+
+Source of counts:
+ledger-manager/build/test-results/test/*.xml
+tests/build/test-results/test/*.xml
