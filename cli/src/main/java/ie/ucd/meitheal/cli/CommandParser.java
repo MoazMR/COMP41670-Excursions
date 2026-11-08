@@ -25,7 +25,6 @@ public final class CommandParser {
                 } else {
                     token.append(current);
                 }
-                tokenStarted = true;
             } else if (Character.isWhitespace(current)) {
                 if (tokenStarted) {
                     tokens.add(token.toString());
