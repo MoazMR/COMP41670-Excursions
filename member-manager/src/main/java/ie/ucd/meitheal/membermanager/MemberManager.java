@@ -176,11 +176,15 @@ public final class MemberManager {
     private MemberId nextMemberId() {
         while (true) {
             var candidate = MemberId.create();
-            if (!membersById.containsKey(candidate)
-                    && preparedRegistrations.values().stream().noneMatch(reg -> reg.memberId().equals(candidate))) {
+            if (isMemberIdAvailable(candidate)) {
                 return candidate;
             }
         }
+    }
+
+    private boolean isMemberIdAvailable(MemberId candidate) {
+        return !membersById.containsKey(candidate)
+                && preparedRegistrations.values().stream().noneMatch(reg -> reg.memberId().equals(candidate));
     }
 
     private EmailAddress parseEmail(String email) {
