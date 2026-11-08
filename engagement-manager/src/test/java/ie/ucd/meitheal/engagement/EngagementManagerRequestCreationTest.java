@@ -267,6 +267,45 @@ class EngagementManagerRequestCreationTest {
         assertThrows(NullPointerException.class, () -> manager.findRequestById(null));
     }
 
+    @Test
+    void unknownRequesterTakesPrecedenceOverUnknownCategory() {
+        MemberId requester = new MemberId(UUID.randomUUID());
+        CategoryId category = new CategoryId("gardening");
+        EngagementManager manager = new EngagementManager(
+                new FakeMemberReadAccess(Map.of(requester, true)),
+                new FakeCategoryReadAccess(Set.of(category))
+        );
+
+        RequestCreationResult created = manager.createRequest(
+                new RequestId(UUID.randomUUID()),
+                requester,
+                category,
+                new RequestDuration(30),
+                new RequestWindow(
+                        LocalDate.of(2026, 11, 10),
+                        LocalDate.of(2026, 11, 12)
+                )
+        );
+        assertInstanceOf(RequestCreationResult.Success.class, created);
+        List<Request> before = manager.getRequests();
+
+        RequestCreationResult result = manager.createRequest(
+                new RequestId(UUID.randomUUID()),
+                new MemberId(UUID.randomUUID()),
+                new CategoryId("unknown"),
+                new RequestDuration(60),
+                new RequestWindow(
+                        LocalDate.of(2026, 11, 10),
+                        LocalDate.of(2026, 11, 12)
+                )
+        );
+
+        RequestCreationResult.Failure failure =
+                assertInstanceOf(RequestCreationResult.Failure.class, result);
+        assertEquals(RequestCreationError.NOT_FOUND, failure.code());
+        assertEquals(before, manager.getRequests());
+    }
+
     private static final class FakeMemberReadAccess implements MemberReadAccess {
         private final Map<MemberId, Boolean> membersByActiveStatus;
 
