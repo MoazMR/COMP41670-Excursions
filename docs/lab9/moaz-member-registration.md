@@ -4,7 +4,7 @@ Branch: `refactor/moaz-member-registration`
 
 ## Scope and ownership
 
-Moaz owns the `MemberManager` registration workflow only: preparation, canonical-email reservation, commit/abort token handling, and member-ID selection. No other teammate's manager module was changed. The allocation is recorded in `docs/lab9_allocation.md`; only Moaz's row is asserted as confirmed here.
+Moaz owns the `MemberManager` registration workflow only: preparation, canonical-email reservation, commit/abort token handling, and member-ID selection. No other teammate's manager module was changed. `docs/lab9_allocation.md` now records every subsystem owner from the V3 group handover; Moaz's row additionally records the exact narrow Lab 9 branch and workflow.
 
 ## Hotspot evidence
 
@@ -45,3 +45,7 @@ Extracted helpers are intentionally small: `normalizeAndValidateName` 6/3, `requ
 ## Verification
 
 Final `.\gradlew.bat test --rerun-tasks`: `BUILD SUCCESSFUL`; 18 tests, 0 failures, 0 errors, 0 skipped. Full evidence and the debt register are mirrored in the personal portfolio repository under `lab9/`.
+
+## Parallel-work warning compliance
+
+The branch does not edit the shared/app modules, `MeithealService`, shared IDs/results/errors/status enums, grant or cancellation semantics, cross-manager atomicity, or composition-root wiring. Its production diff relative to `feature/moaz-member-manager` is confined to private helper extractions in `MemberManager`. It has not been merged into `main`. Because the underlying feature branch still contains a temporary local `MemberId` and prepared-registration contract, this branch must wait for Joe's V3 foundation fixes, then merge the updated `main` and adapt to the agreed shared contracts before integration.
