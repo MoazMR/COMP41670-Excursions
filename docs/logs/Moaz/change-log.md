@@ -13,4 +13,5 @@ Record each commit made while working on an individual branch. Add the commit be
 | 2026-11-08 | `refactor/moaz-member-registration` | `99baec8` | Extracted registration publication/consumption mutations. | Focused suite successful. | Pending |
 | 2026-11-08 | `refactor/moaz-member-registration` | `d4e8e20` | Extracted the member-ID availability predicate. | Focused suite successful. | Pending |
 | 2026-11-08 | `refactor/moaz-member-registration` | `5d24494` | Strengthened the adversarial characterization with the exception-cause assertion. | Focused suite successful. | Pending |
-| 2026-11-08 | `refactor/moaz-member-registration` | This evidence commit | Added metrics, transcript, interaction decisions, verification results, and portfolio traceability. | Full suite: 18 tests, 0 failures/errors/skips; diff check clean. | Pending |
+| 2026-11-08 | `refactor/moaz-member-registration` | `5887796` | Added metrics, transcript, interaction decisions, verification results, and portfolio traceability. | Full suite: 18 tests, 0 failures/errors/skips; diff check clean. | Pending |
+| 2026-11-08 | `refactor/moaz-member-registration` | `96601f8` | Aligned the Lab 9 allocation record with V3 subsystem ownership and documented the parallel-work boundary. | Allocation and V3 warning reviewed; production scope unchanged. | Pending |
