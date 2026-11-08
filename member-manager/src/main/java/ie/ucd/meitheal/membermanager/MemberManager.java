@@ -126,7 +126,7 @@ public final class MemberManager {
     }
 
     public synchronized boolean publishCategory(MemberId memberId, CategoryId categoryId) {
-        var member = requireMember(memberId);
+        var member = requireActive(memberId);
         if (categoryId == null || !configuredCategories.contains(categoryId)) {
             throw failure(MemberManagerException.Code.INVALID_CATEGORY,
                     "Category is not in the configured category catalog");

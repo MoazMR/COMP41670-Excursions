@@ -158,6 +158,20 @@ class MemberManagerTest {
     }
 
     @Test
+    void suspendedMemberCannotPublishANewCategoryAndStateDoesNotChange() {
+        var member = register("alex@example.com");
+        members.publishCategory(member.id(), GARDENING);
+        members.suspend(member.id());
+
+        assertCode(MemberManagerException.Code.MEMBER_SUSPENDED,
+                () -> members.publishCategory(member.id(), COOKING));
+
+        var unchanged = members.findById(member.id()).orElseThrow();
+        assertEquals(MemberStatus.SUSPENDED, unchanged.status());
+        assertEquals(Set.of(GARDENING), unchanged.offeredCategories());
+    }
+
+    @Test
     void categoryIdsMustBeNonblankAndConfiguredCategoriesAreImmutable() {
         assertThrows(IllegalArgumentException.class, () -> new CategoryId("  "));
         assertThrows(IllegalArgumentException.class, () -> new CategoryId(null));
