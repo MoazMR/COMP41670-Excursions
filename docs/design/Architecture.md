@@ -52,4 +52,4 @@ member balance total + community fund balance
 = approved initial external source + 120 * registered member count
 ```
 
-If the team selects an initial fund of zero, the external-source term is zero and R3 remains easier to defend.
+The V2 policy sets the initial fund to zero, so the external-source term is zero. A non-zero seed requires a binding clarification and recorded amendment.

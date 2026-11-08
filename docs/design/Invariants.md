@@ -5,7 +5,7 @@
 The agreed baseline has 13 invariants, which is within the brief's expected range. The following V2 corrections apply before implementation and report submission:
 
 - R12 is best treated as an interface and encapsulation contract rather than a state invariant. The state portion of INV-11 remains the append-only, balance-derived ledger property from R7. R12 still requires direct tests.
-- The current INV-10 requires exactly two positive settlement transactions, but a valid 1 to 19 minute session has a zero-credit levy. The recommended correction is one required service-payment transaction and one levy transaction only when the calculated levy is positive.
+- A valid 1 to 19 minute session has a zero-credit levy. The V2 amendment requires one service-payment transaction and a levy transaction only when the calculated levy is positive.
 
 This treatment answers the report template's question about which rule yields no invariant while preserving all required behaviour.
 
