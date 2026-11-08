@@ -1,6 +1,7 @@
 # Lab 9 - Moaz member-registration hotspot
 
 Branch: `refactor/moaz-member-registration`
+Pull request: [#3](https://github.com/MoazMR/COMP41670-Excursions/pull/3), stacked on Member Manager feature PR [#2](https://github.com/MoazMR/COMP41670-Excursions/pull/2)
 
 ## Scope and ownership
 
