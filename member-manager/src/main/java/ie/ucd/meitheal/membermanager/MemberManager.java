@@ -32,24 +32,31 @@ public final class MemberManager {
     }
 
     public synchronized PreparedRegistration prepareRegistration(String name, String email) {
-        if (name == null || name.isBlank()) {
-            throw failure(MemberManagerException.Code.INVALID_NAME, "Member name must not be blank");
-        }
-
-        var normalizedName = name.trim();
+        var normalizedName = normalizeAndValidateName(name);
         var address = parseEmail(email);
         var canonicalEmail = address.canonicalValue();
-        if (memberIdsByCanonicalEmail.containsKey(canonicalEmail)
-                || reservationTokensByCanonicalEmail.containsKey(canonicalEmail)) {
-            throw failure(MemberManagerException.Code.DUPLICATE_EMAIL,
-                    "A member with this email address already exists or is being registered");
-        }
+        requireEmailAvailable(canonicalEmail);
 
         var member = new Member(nextMemberId(), normalizedName, address, MemberStatus.ACTIVE, Set.of());
         var registration = new PreparedRegistration(UUID.randomUUID(), member);
         preparedRegistrations.put(registration.token(), registration);
         reservationTokensByCanonicalEmail.put(canonicalEmail, registration.token());
         return registration;
+    }
+
+    private String normalizeAndValidateName(String name) {
+        if (name == null || name.isBlank()) {
+            throw failure(MemberManagerException.Code.INVALID_NAME, "Member name must not be blank");
+        }
+        return name.trim();
+    }
+
+    private void requireEmailAvailable(String canonicalEmail) {
+        if (memberIdsByCanonicalEmail.containsKey(canonicalEmail)
+                || reservationTokensByCanonicalEmail.containsKey(canonicalEmail)) {
+            throw failure(MemberManagerException.Code.DUPLICATE_EMAIL,
+                    "A member with this email address already exists or is being registered");
+        }
     }
 
     public synchronized Member commitRegistration(PreparedRegistration registration) {
@@ -62,11 +69,16 @@ public final class MemberManager {
                     "Prepared registration conflicts with existing member state");
         }
 
+        consumePreparedRegistrationAndPublishMember(pending, member, canonicalEmail);
+        return member;
+    }
+
+    private void consumePreparedRegistrationAndPublishMember(
+            PreparedRegistration pending, Member member, String canonicalEmail) {
         preparedRegistrations.remove(pending.token());
         reservationTokensByCanonicalEmail.remove(canonicalEmail);
         membersById.put(member.id(), member);
         memberIdsByCanonicalEmail.put(canonicalEmail, member.id());
-        return member;
     }
 
     public synchronized void abortRegistration(PreparedRegistration registration) {
@@ -164,11 +176,15 @@ public final class MemberManager {
     private MemberId nextMemberId() {
         while (true) {
             var candidate = MemberId.create();
-            if (!membersById.containsKey(candidate)
-                    && preparedRegistrations.values().stream().noneMatch(reg -> reg.memberId().equals(candidate))) {
+            if (isMemberIdAvailable(candidate)) {
                 return candidate;
             }
         }
+    }
+
+    private boolean isMemberIdAvailable(MemberId candidate) {
+        return !membersById.containsKey(candidate)
+                && preparedRegistrations.values().stream().noneMatch(reg -> reg.memberId().equals(candidate));
     }
 
     private EmailAddress parseEmail(String email) {
