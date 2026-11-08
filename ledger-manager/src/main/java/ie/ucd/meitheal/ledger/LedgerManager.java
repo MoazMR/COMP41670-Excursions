@@ -30,11 +30,7 @@ public final class LedgerManager {
     public synchronized Transaction grantWelcome(MemberId memberId) {
         Objects.requireNonNull(memberId, "memberId");
         AccountReference creditor = AccountReference.member(memberId);
-        if (transactions.stream().anyMatch(transaction ->
-                transaction.type() == TransactionType.WELCOME_GRANT
-                        && transaction.creditor().equals(creditor))) {
-            throw new IllegalStateException("welcome grant already exists for member");
-        }
+        ensureWelcomeGrantDoesNotExist(creditor);
 
         Transaction transaction = new Transaction(
                 Objects.requireNonNull(transactionIdGenerator.get(), "generated transaction ID"),
@@ -45,6 +41,14 @@ public final class LedgerManager {
                 Objects.requireNonNull(dateGenerator.get(), "generated date"));
         append(transaction);
         return transaction;
+    }
+
+    private void ensureWelcomeGrantDoesNotExist(AccountReference creditor) {
+        if (transactions.stream().anyMatch(transaction ->
+                transaction.type() == TransactionType.WELCOME_GRANT
+                        && transaction.creditor().equals(creditor))) {
+            throw new IllegalStateException("welcome grant already exists for member");
+        }
     }
 
     private synchronized void append(Transaction transaction) {
