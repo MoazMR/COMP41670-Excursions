@@ -1,6 +1,7 @@
 package ie.ucd.meitheal.membermanager;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -85,6 +86,7 @@ class MemberManagerRegistrationCharacterisationTest {
 
         assertEquals(MemberManagerException.Code.INVALID_NAME, exception.code());
         assertEquals("Member name must not be blank", exception.getMessage());
+        assertNull(exception.getCause());
         assertTrue(members.getMembers().isEmpty());
     }
 }
