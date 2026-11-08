@@ -69,11 +69,16 @@ public final class MemberManager {
                     "Prepared registration conflicts with existing member state");
         }
 
+        consumePreparedRegistrationAndPublishMember(pending, member, canonicalEmail);
+        return member;
+    }
+
+    private void consumePreparedRegistrationAndPublishMember(
+            PreparedRegistration pending, Member member, String canonicalEmail) {
         preparedRegistrations.remove(pending.token());
         reservationTokensByCanonicalEmail.remove(canonicalEmail);
         membersById.put(member.id(), member);
         memberIdsByCanonicalEmail.put(canonicalEmail, member.id());
-        return member;
     }
 
     public synchronized void abortRegistration(PreparedRegistration registration) {
