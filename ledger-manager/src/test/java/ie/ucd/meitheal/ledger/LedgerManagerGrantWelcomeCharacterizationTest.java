@@ -35,6 +35,33 @@ class LedgerManagerGrantWelcomeCharacterizationTest {
     }
 
     @Test
+    void injectedSuppliersObserveGrantWelcomeAsNearestLedgerManagerCaller() {
+        List<String> nearestLedgerManagerMethods = new ArrayList<>();
+        LedgerManager ledger = new LedgerManager(
+                () -> {
+                    nearestLedgerManagerMethods.add(nearestLedgerManagerMethod());
+                    return new TransactionId("grant-1");
+                },
+                () -> {
+                    nearestLedgerManagerMethods.add(nearestLedgerManagerMethod());
+                    return GRANT_DATE;
+                });
+
+        ledger.grantWelcome(ALICE);
+
+        assertEquals(List.of("grantWelcome", "grantWelcome"), nearestLedgerManagerMethods);
+    }
+
+    private static String nearestLedgerManagerMethod() {
+        return StackWalker.getInstance(StackWalker.Option.RETAIN_CLASS_REFERENCE)
+                .walk(frames -> frames
+                        .filter(frame -> frame.getDeclaringClass() == LedgerManager.class)
+                        .map(StackWalker.StackFrame::getMethodName)
+                        .findFirst())
+                .orElseThrow();
+    }
+
+    @Test
     void duplicateGrantRejectsBeforeInvokingSuppliersAgainAndPreservesState() {
         AtomicInteger transactionIdInvocations = new AtomicInteger();
         AtomicInteger dateInvocations = new AtomicInteger();
