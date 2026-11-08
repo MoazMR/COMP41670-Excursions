@@ -32,24 +32,31 @@ public final class MemberManager {
     }
 
     public synchronized PreparedRegistration prepareRegistration(String name, String email) {
-        if (name == null || name.isBlank()) {
-            throw failure(MemberManagerException.Code.INVALID_NAME, "Member name must not be blank");
-        }
-
-        var normalizedName = name.trim();
+        var normalizedName = normalizeAndValidateName(name);
         var address = parseEmail(email);
         var canonicalEmail = address.canonicalValue();
-        if (memberIdsByCanonicalEmail.containsKey(canonicalEmail)
-                || reservationTokensByCanonicalEmail.containsKey(canonicalEmail)) {
-            throw failure(MemberManagerException.Code.DUPLICATE_EMAIL,
-                    "A member with this email address already exists or is being registered");
-        }
+        requireEmailAvailable(canonicalEmail);
 
         var member = new Member(nextMemberId(), normalizedName, address, MemberStatus.ACTIVE, Set.of());
         var registration = new PreparedRegistration(UUID.randomUUID(), member);
         preparedRegistrations.put(registration.token(), registration);
         reservationTokensByCanonicalEmail.put(canonicalEmail, registration.token());
         return registration;
+    }
+
+    private String normalizeAndValidateName(String name) {
+        if (name == null || name.isBlank()) {
+            throw failure(MemberManagerException.Code.INVALID_NAME, "Member name must not be blank");
+        }
+        return name.trim();
+    }
+
+    private void requireEmailAvailable(String canonicalEmail) {
+        if (memberIdsByCanonicalEmail.containsKey(canonicalEmail)
+                || reservationTokensByCanonicalEmail.containsKey(canonicalEmail)) {
+            throw failure(MemberManagerException.Code.DUPLICATE_EMAIL,
+                    "A member with this email address already exists or is being registered");
+        }
     }
 
     public synchronized Member commitRegistration(PreparedRegistration registration) {
