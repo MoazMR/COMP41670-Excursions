@@ -19,5 +19,6 @@ include(
     'engagement-manager',
     'scheduler',
     'cli',
-    'tests'
+    'tests',
+    'shared'
 )
