@@ -33,6 +33,8 @@ Query results are immutable snapshots. A matching query returns candidate reques
 
 ## Registration and configured categories
 
+The first successful registration receives member ID `100001`. Each subsequent successful registration receives the next six-digit number, up to `999999`. A failed registration leaves the next number available. The service supplies the member ID, and the CLI and all managers use it unchanged.
+
 Registration validates the supplied name and email and uses canonical email lookup to reject an already registered canonical email. A successful registration creates one active member and one 120-credit welcome grant. A duplicate canonical email is rejected without registering another member or issuing another grant. Registration is one cross-manager operation from the caller's perspective: if the grant cannot be committed, neither the new membership nor its grant is observable as committed, and the caller may retry after an uncommitted technical failure.
 
 The category catalogue is fixed at startup and read-only. An offer or request must name a category in that configured catalogue. An unknown category is rejected; it is not added to the catalogue by creating an offer or request.
@@ -77,7 +79,7 @@ These codes are distinct caller results; the service declarations identify the a
 
 ## Cross-owner failure contract
 
-For an operation coordinated across owners, validation failure or an uncommitted technical failure preserves both owners' observable state. In particular, callers must not observe a member without its welcome grant, an engagement without its corresponding hold, a completed engagement without settlement, or a cancelled engagement with a still-held balance. A technical failure before commit returns a stable failure result and leaves the operation retryable. Successful calls expose the corresponding owner state consistently. The [architecture decision](Architecture.md#team-decision-before-pairing-managers) explains what still needs agreement about preparation and publication.
+For an operation coordinated across owners, validation failure or an uncommitted technical failure preserves both owners' observable state. In particular, callers must not observe a member without its welcome grant, an engagement without its corresponding hold, a completed engagement without settlement, or a cancelled engagement with a still-held balance. A technical failure before commit returns a stable failure result and leaves the operation retryable. Successful calls expose the corresponding owner state consistently. The service holds one shared lock while the managers prepare their changes and replace their live records. [How managers make a change together](Architecture.md#how-managers-make-a-change-together)
 
 | Joint operation | Successful state visible to callers | Failure case to verify with the real components |
 | --- | --- | --- |
@@ -87,8 +89,26 @@ For an operation coordinated across owners, validation failure or an uncommitted
 | Cancellation | The engagement is cancelled, the cancellation is recorded, and the hold is released without a transfer. | Fail hold release. Verify the engagement remains agreed, the original hold remains, and no cancellation record or transfer appears. |
 | Suspension | The member is suspended and pending proposals involving that member are invalidated. Existing agreed work remains available under its usual rules. | Fail proposal invalidation. Verify member status and pending proposals are unchanged. |
 
-## Shared changes to agree together
+## Inputs for coordinated changes
 
-- **Registration first.** Moaz, Benjamin, and Joe agree the preparation inputs, who supplies the ID and date, how each side reports failure, and the publication boundary. Keep the public result and retry behavior consistent with the registration contract above.
-- **Lifecycle next.** Matthew, Benjamin, and Joe agree the identifiers and state needed for selection, hold, release, and settlement. Moaz and Matthew agree the eligibility reads and the suspension and proposal-invalidation boundary.
-- **Caller changes.** If a Java signature, result code, or observable result changes, agree it with the owner and its consumers, including Abdus for CLI-facing changes. Update the Java declaration, this document where the behavior changes, and the focused test in the same change.
+| Operation | Data passed between service and managers |
+| --- | --- |
+| Registration | The service obtains a new member ID and welcome transaction ID from the injected ID factory and reads the simulated date once. Membership receives the member ID, name and email, checks the canonical email and prepares the active member. Ledger receives the same member ID, the transaction ID and the date, and prepares the one-time 120-credit welcome entry. The service returns the member view with the resulting ledger balance. |
+| Selection | Engagement checks the caller owns the request and the proposal is pending on that open request. Membership confirms both people are eligible. The service allocates an engagement ID. Engagement prepares the selection using the request, proposal and engagement IDs. It supplies the requester ID, helper ID and validated duration from the selected work. Ledger uses those values to calculate payment and levy, check the available-balance floor and prepare a hold keyed by engagement ID. |
+| Confirmation and settlement | The service passes the participant ID, engagement ID and simulated date to engagement. The first valid confirmation updates engagement alone. For the second distinct confirmation, ledger looks up the held amounts and parties by engagement ID. It prepares one dated payment to the helper and a dated levy to the fund only if positive. The service supplies a fresh transaction ID from the factory for each entry. Engagement prepares completion in the same operation. |
+| Cancellation | Engagement receives the participant ID, engagement ID and simulated date. It validates the request and prepares the actor, date and late flag. Ledger receives the engagement ID and prepares release of that hold without a transaction. |
+| Suspension and eligibility | The service reads membership status through `isEligible(memberId)` and skills through `findById(memberId)`. For suspension, membership prepares the status change and engagement receives the same member ID. Engagement invalidates every pending proposal where that member is the helper or owns the request. Both changes take effect together. Existing agreed engagements retain their ordinary confirmation and cancellation rules. |
+
+## Startup catalogue
+
+Matthew supplies the UTF-8 resource `app/src/main/resources/categories.csv` with the header `id,name`. The initial rows are `gardening,Gardening`, `cooking,Cooking` and `carpentry,Carpentry`. Joe loads and validates it once at startup. A missing resource, blank field or duplicate ID stops startup with a configuration error. Membership and engagement use the same read-only catalogue. The CLI lists the IDs and display names returned by the service. Integration tests use these stable IDs. Manager unit tests may inject a smaller catalogue.
+
+## First console results
+
+| Command outcome | What the CLI displays |
+| --- | --- |
+| Registration succeeds | Member ID, name, status and ledger credits from the returned `MemberView`. For a new member the status is ACTIVE and the ledger balance is 120 credits. |
+| Balance succeeds | Member ID, ledger balance, held credits and available credits from the returned `BalanceView`. Label each amount and preserve its sign. |
+| Either command fails | The stable failure code and the service's detail when present. Print one failure message. |
+
+If a future change affects a Java signature, result code or observable result, update the declaration, the affected contract and its focused test together. Include the owner and the callers affected by the change.

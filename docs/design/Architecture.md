@@ -1,6 +1,6 @@
 # Component architecture
 
-[SharedContracts.md](SharedContracts.md) defines the behavior collaborators can rely on. [Invariants.md](Invariants.md) records what must hold and how to test it. This document explains why the components are split this way and which integration decisions still need team agreement.
+[SharedContracts.md](SharedContracts.md) defines the behavior collaborators can rely on. [Invariants.md](Invariants.md) records what must hold and how to test it. This document explains why the components are split this way and how the service coordinates them.
 
 ## Dependency direction
 
@@ -34,13 +34,17 @@ Application startup constructs the concrete components and connects them through
 | Date-sensitive operations use a shared simulated date. | A workflow uses the same date for validation and ledgers, and tests can reproduce date boundaries without depending on the machine clock. | Let each component read the machine clock. A single command could observe different dates, and boundary tests would depend on wall time. |
 | The catalogue is configured at startup and manager state is kept in memory. | Validation and matching work from a fixed list of categories. The CLI, managers, and service can be exercised without a database, authentication service, or background scheduler. | Let users add categories through a request or offer, or introduce persistent infrastructure before the core workflow is working. |
 
-## Team decision before pairing managers
+## How managers make a change together
 
-The success and failure behavior is agreed in [SharedContracts.md](SharedContracts.md#cross-owner-failure-contract). The Java manager interfaces do not yet define how each owner prepares and publishes a shared change.
+The application runs in memory. Joe wires one shared lock into the service and the participating managers. Every operation that reads or writes live domain state uses that lock. The service holds it for the entire command or query, including reading the simulated date and building the result. Each manager keeps ownership of its own records.
 
-Start by agreeing the registration boundary. Joe, Moaz, and Benjamin should settle what each owner prepares, when its checks can fail, how a stale preparation is detected, and how the service makes the member and welcome grant visible together. Prepare and validate both changes before publication. Agree the publication mechanism and prove it with a failure test before relying on it. Running two ordinary writes back to back would leave a member without a grant if the second write failed. Once registration works, apply the same reasoning to holds, settlement, cancellation, and suspension.
+1. Under the lock, each affected manager checks the current records and builds its proposed next state privately. It copies only the collections it will change. Validation, ID allocation, transaction construction and result construction all happen here.
+2. If a check rejects the command, the service returns its documented failure code. If preparation fails unexpectedly, the service returns `ATOMIC_OPERATION_FAILED`. Both paths discard the proposed changes. The member ID counter advances only when registration succeeds. Unused IDs of other types may be skipped.
+3. When every part is ready, each manager replaces its live state reference with its prepared state. These assignments perform no validation, allocation, callbacks or I/O. The service then releases the lock. A reader sees either the complete previous state or the complete new state.
 
-Two smaller handoffs also need agreement. Moaz and Matthew should confirm who supplies the fixed catalogue file and which category IDs tests and the CLI can rely on. Joe and Abdus should agree which service results the first registration and balance commands display. Keep concrete signatures in Java and use an owner-local test while the real collaborating component is being built.
+A prepared change belongs to one call and never leaves the locked operation. Other commands cannot change the records between validation and publication, so there is no stale preparation to detect or recover. For the first integration test, inject a failure after the member and grant have been prepared but before the first assignment. Verify both are absent, then retry and verify exactly one of each. Exercise the same boundary for selection, settlement, cancellation and suspension.
+
+The inputs for each operation, the startup catalogue and the first console results are specified in [SharedContracts.md](SharedContracts.md#inputs-for-coordinated-changes).
 
 ## First independent slices
 
