@@ -1,84 +1,64 @@
 # Invariants and traceability
 
-## Report treatment
-
-The agreed baseline has 13 invariants, which is within the brief's expected range. The following V2 corrections apply before implementation and report submission:
-
-- R12 is best treated as an interface and encapsulation contract rather than a state invariant. The state portion of INV-11 remains the append-only, balance-derived ledger property from R7. R12 still requires direct tests.
-- A valid 1 to 19 minute session has a zero-credit levy. The V2 amendment requires one service-payment transaction and a levy transaction only when the calculated levy is positive.
-
-This treatment answers the report template's question about which rule yields no invariant while preserving all required behaviour.
+Each row states what must be true of committed application state. **Enforced at** identifies the owner, the operation that checks the rule, and where state changes become visible. **Test** lists planned setup, actions, and assertions. As each implementation lands, link the actual method and JUnit tests that cover the cases.
 
 ## Invariant map
 
-| ID | State predicate | Brief source | Primary enforcement | Named failing test |
+| ID | State predicate | Brief source | Enforced at | Test |
 | --- | --- | --- | --- | --- |
-| INV-1 | Every request and engagement duration is 1 to 480 whole minutes, and service payment equals duration. | R1, R8 | Request creation and immutable propagation | `requestDurationBoundariesAndValuation` |
-| INV-2 | Every ledger balance and available balance is at least -180. | R2, R10 | `LedgerManager` hold and debit validation | `holdAtMinus180SucceedsAndMinus181FailsAtomically` |
-| INV-3 | Member total plus fund equals approved initial sources plus 120 times registered member count. | R3, R10, R11 | Initialization, registration, settlement, grant | `systemCreditsRemainConservedAcrossAllTransfers` |
-| INV-4 | Each member has exactly one welcome grant, initialization occurs at most once, and no other transaction type creates credits. | R3 | Initialization, registration, transaction restrictions | `repeatedIssuanceCannotMintCredits` |
-| INV-5 | Every reference resolves to the correct record type, categories are configured, publications are unique, windows are ordered, and proposal dates lie inside them. | R9, R13 | Typed IDs, catalog, creation and selection checks | `invalidReferencesCategoriesAndWindowsLeaveNoState` |
-| INV-6 | Helper and requester are different for every proposal and engagement. | R5 | Matching, proposal submission, selection | `selfFulfilmentIsNeverVisibleOrAccepted` |
-| INV-7 | One helper has at most one pending proposal per request, one request has at most one selected proposal, and one selected proposal creates one engagement. | R4, R5, R6, R9 | Map uniqueness and atomic selection | `selectingOneProposalClosesAllCompetingPaths` |
-| INV-8 | A pending proposal always has an active requester and active helper. Suspended members may remain only in historical or already agreed work. | R6 | Suspension cleanup and revalidation | `suspensionInvalidatesPendingButPreservesAgreedWork` |
-| INV-9 | AGREED maps to HELD, COMPLETED maps to SETTLED, and CANCELLED maps to RELEASED with a valid cancellation record and no settlement transactions. | R2, R4, R10, R14 | Selection, cancellation, settlement | `engagementStatusAndHoldStatusStayEquivalent` |
-| INV-10 | COMPLETED exists exactly when both participants confirmed, one service-payment transaction references the engagement, and one levy transaction also references it when the levy is positive. AGREED has at most one confirmation and no settlement transaction. | R1, R4, R7, R10 | Confirmation and idempotent settlement | `secondDistinctConfirmationSettlesExactlyOnce` |
-| INV-11 | Transaction IDs are unique, transactions are immutable and append-only, and balances equal the fold of applicable transactions. | R7 | `LedgerManager` | `ledgerHistoryCannotBeChangedOrDivergeFromBalances` |
-| INV-12 | The fund is non-negative, every grant is positive and goes to a negative-balance member, and the approved date exclusion is respected. | R3, R11 | Grant validation and transfer | `grantEligibilityAndMonthBoundaryProtectFund` |
-| INV-13 | The simulated date starts on or after 1 September 2026, never decreases, and is the only domain date source. | Team time decision supporting R9, R11, R14 | `SimulatedClock` and constructor wiring | `allDateRulesUseOneForwardOnlyClock` |
+| INV-1 | Every request and engagement records a duration of 1 through 480 whole minutes. | R8 | Request creation validates duration and engagement creation carries the validated duration forward. | Create requests of 1 and 480 minutes and verify both are accepted. Try 0 and 481 and verify no request is stored. Select a proposal for a 480-minute request and verify that the engagement retains the same duration. |
+| INV-2 | Every member's ledger balance and available balance are at least -180 credits. Available balance equals ledger balance minus all active holds. | R2, R10 | `LedgerManager` checks available balance before accepting a hold or another debit. Settlement validates and consumes the matching hold, including its levy. | With a ledger balance of -159, selecting a 20-minute engagement holds 21 credits and leaves -180 available. Repeat from -160 and assert rejection with no new hold or engagement. After successful settlement, assert the ledger balance is -180 and the hold is consumed once. |
+| INV-3 | The sum of member ledger balances and the community fund balance equals 120 credits times the registered member count. | R3, R10, R11 | Registration publishes the member and the welcome credit together. `LedgerManager` posts settlement and community grants as transfers between existing accounts. The service combines ledger and member totals for reporting. | Start with an empty system and assert a total of 0. Register two members and assert 240. Settle a 60-minute engagement and verify the helper gains 60, the requester loses 63, and the fund gains 3 with the total still 240. Transfer a grant to an eligible member and assert the combined total is unchanged. |
+| INV-4 | Each registered member has exactly one 120-credit welcome transaction. The ledger contains no fund-seeding transaction. | R3 | The registration service coordinates member creation with `LedgerManager`'s welcome grant keyed by member ID. The community fund starts at zero. | Register one member and assert one welcome transaction for 120. Retry registration with the same canonical email and assert one member and one welcome entry. Inject a failure in the welcome grant and assert no member or grant is visible. Check a fresh fund starts at zero with no initialization transaction. |
+| INV-5 | Stored requests and offers reference configured categories. Offers are unique per member and category. Request windows are ordered, and every proposal refers to an existing request and has a date inside its inclusive window. | R9, R13 | The startup catalogue supplies valid categories. The member manager checks offer publication. The engagement manager validates request references, window bounds, and proposal dates before storing records. | Reject an unknown category in both an offer and a request. Publish the same category twice and assert one stored offer. Reject a reversed window and a proposal for an unknown request. For a 4-6 May window, accept 4 and 6 May and reject 3 and 7 May with no proposal stored. |
+| INV-6 | The requester and helper IDs differ on every stored proposal and engagement. | R5 | Matching excludes the helper's own requests. Proposal submission and requester selection recheck participant IDs before writing. | Have a member publish the matching skill and open a request in that category. Assert that their own request is absent from their matches. Submit a proposal directly against it and assert no proposal or engagement is created. Attempt selection of a self-fulfilment candidate through the owner boundary and assert state is unchanged. |
+| INV-7 | A helper has at most one pending proposal per request. Each request has at most one selected proposal and one corresponding engagement. A request with a selected proposal has no competing pending proposal. | R4, R5, R6, R9 | The engagement manager checks pending proposal uniqueness on submission. Selection closes the request, selects one proposal, rejects competing proposals, and creates one engagement in the same publication. | Submit two proposals from the same helper for one request and assert only one remains pending. Submit proposals from two different helpers, select one, and assert one engagement and zero other pending proposals. Retry selection and verify no second engagement or hold. |
+| INV-8 | Every pending proposal has an active requester and an active helper. A suspended member may remain a participant in already agreed or historical work. | R6 | The member manager owns status. The service publishes suspension and pending-proposal invalidation together. The engagement manager checks both participants again when agreeing new work. | Suspend the requester and, in a separate case, the helper while a proposal is pending. Assert the proposal is no longer selectable, and assert new requests, offers, or engagements are rejected for the suspended member. Suspend a helper after agreement and verify they can still confirm and receive settlement credit. |
+| INV-9 | An agreed engagement has a held reservation. A completed engagement has a settled reservation. A cancelled engagement has a released reservation and a cancellation record identifying the actor, date, and late status. It has no settlement transactions. | R2, R4, R10, R14 | The service coordinates engagement and ledger publication for selection, settlement, and cancellation. Cancellation validates the participant and simulated date before releasing the hold and recording the outcome. | Select an engagement and assert `AGREED` and `HELD` together. For separate 4 May engagements, cancel on 2 May and 3 May and verify the early and late records and released holds. Attempt cancellation on 4 and 5 May and verify rejection and unchanged state. Force hold release to fail and assert the engagement remains agreed with its original hold and ledger. |
+| INV-10 | An agreed engagement has at most one distinct completion confirmation and no settlement entries. A completed engagement has both participants' confirmations and exactly one linked service payment, plus a linked levy transaction when INV-14 requires it. | R4, R7, R10 | The engagement manager records the first confirmation and rejects repeat confirmation by the same participant. The service coordinates the second confirmation with `LedgerManager` settlement so both are published together. | Confirm in both participant orders. After the first confirmation assert no credit moved, then assert the second settles exactly once. Repeat the first actor and verify no settlement. Inject a settlement failure on the second confirmation and check the first confirmation, hold, and balances are preserved. Retry and assert a single settlement. |
+| INV-11 | Ledger transaction IDs are unique. Posted transactions are immutable and retain their original order. Every ledger balance equals the sum of its posted credits minus its posted debits. | R7 | `LedgerManager` validates ID uniqueness before append, provides read-only history snapshots, and derives ledger balances from applicable transaction entries. | Start a member with 120 credits, debit 63 at settlement, and assert their ledger balance is 57. Capture history before a later transaction and assert the old entries remain unchanged and in order. Reuse a transaction ID and verify the ledger is unchanged. Attempt to mutate returned history and verify the underlying ledger is unaffected. |
+| INV-12 | The community fund balance is non-negative in every committed state. | R3, R11 | `LedgerManager` checks the fund can cover the amount before posting a community-grant debit. Settlement can increase the fund through a levy. | With a fund of 5 and separate otherwise eligible applicants, request 5 and assert success with a fund balance of 0. From the same starting state request 6 and assert rejection, a balance of 5, and no grant entry. From an empty fund request 1 and verify rejection. |
+| INV-13 | The simulated date starts on or after 1 September 2026, never moves backward, and supplies the date used by domain operations. | Shared clock design for R9, R11, R14 | `SimulatedClock` validates the initial date and every advance. The application supplies the same clock to the service, which passes the simulated date to date-sensitive checks and ledger records. | Reject 31 August 2026 as a start date and accept 1 September. Advance to the same day and assert a successful no-op. Advance one day, then attempt to return to the previous day and assert rejection. Use a simulated date different from the machine date and verify a welcome transaction uses the simulated date. |
+| INV-14 | For every completed engagement, the levy credited to the community fund equals 5% of the service payment rounded down. A positive levy has exactly one linked transaction. A zero levy has none. | R10 | `LedgerManager` calculates the whole-credit levy when sizing the hold and uses the same value when posting the atomic settlement. The requester pays the levy on top of the helper's service payment. | Settle engagements of 1 and 19 minutes and assert 0 fund credits and no levy transaction. Check 20 minutes gives 1 credit, 59 gives 2, 60 gives 3, and 480 gives 24. In each case assert the helper receives the full service payment and the requester pays the service payment plus the levy. |
+| INV-15 | Each approved grant is positive and goes to a member whose ledger balance was negative just before approval. Each repeat approval is dated strictly after the prior approval date plus one month. | R11 | The grant command parses a whole-credit amount. `LedgerManager` checks the actual ledger balance, amount, and previous approval date using the simulated date, then updates the approval date only when it posts the grant. | With sufficient fund credits, reject a member with a ledger balance of 0 and available balance of -20, and accept an otherwise eligible member with a ledger balance of -1. Reject zero and negative amounts and reject a fractional CLI amount. After a 3 May approval, reject 1 and 3 June and allow 4 June if otherwise eligible. In a non-leap year, reject 28 February after a 31 January approval and allow 1 March. Verify denials leave the ledger and last approval date unchanged. |
+| INV-16 | Public query results give callers no mutable references into manager state. Returned snapshots retain their original values, and a member's engagement history contains only engagements they participated in. | R12 | Managers build immutable snapshots at the query boundary. `MeithealService` filters engagement history by the requesting participant. | Try modifying a returned ledger list and member skill set and verify both reject mutation and leave owner state unchanged. Hold a snapshot, make a successful change, and verify the old snapshot is unchanged while a new query reflects the change. Give A and B separate engagements and assert that A's history excludes B's unrelated engagement. |
 
-Test names are recommended names. Replace them with the final names in the report once the suite exists.
+## Decisions made and tensions found
 
-The INV-10 wording above is the V2 amendment. Update the design, contracts, diagrams, and tests together when implementing settlement.
+- **Overdraft protection versus payment after completion (R2, R4, R10).** Waiting until the second confirmation to check funds could leave the helper unpaid after doing the work. Paying on agreement would move credits too early. The selected proposal therefore creates a hold for the payment and the levy together. Credits stay in the requester's ledger until both participants confirm, and `LedgerManager` posts all settlement movements together. The service publishes the matching engagement outcome with the ledger change. INV-2, INV-9, and INV-10 cover the rejection and retry cases.
+- **Calendar-month wording versus a minimum gap between grants (R11).** The brief says calendar month. Taken literally, approvals on 31 May and 1 June could be a day apart. The team chose a conservative rolling interpretation to keep a meaningful gap across month boundaries. A fixed 28-day wait was also considered, but it would cut some calendar-month intervals short. Only a successful approval starts the exclusion. A 3 May approval blocks another through 3 June, with 4 June the first eligible date if the other conditions hold. [Grant contract](SharedContracts.md#grant-and-clock-date-examples)
+- **Tension 1 - Date-only scheduling versus a 24-hour cancellation window (R9, R14).** The brief gives requests earliest and latest fulfilment dates and defines late cancellation in hours, but it never asks members to enter a start time when booking. Exact enforcement against a real start time would have added time-of-day inputs, a more detailed simulated clock, and time comparisons throughout scheduling and the CLI. **Result.** The team kept the simpler date model and treated the scheduled day as starting at midnight for cancellation purposes. For a 4 May engagement, 2 May is early, 3 May is late, and cancellation is closed from 4 May. A late cancellation is recorded against the cancelling member. Any permitted cancellation releases the hold without transferring credits. This is a date-level interpretation of the 24-hour rule. [Cancellation contract](SharedContracts.md#holds-matching-confirmation-and-cancellation)
+- **Tension 2 - A confirmed booking versus confirmation that work took place (R4, R14).** The word confirmed applies to different events in the two rules. Treating agreement as completion would pay for work before it happened. Treating cancellation as a refund would introduce a reversal workflow. **Result.** Requester selection creates an `AGREED` booking that can still be cancelled before its date. Only the two distinct confirmations that the work took place can move it to `COMPLETED` and settle it.
+- **Short engagements versus positive ledger entries (R7, R8, R10).** A valid 1-19 minute session rounds to zero levy. Always writing two transfers would create a zero-value ledger entry, while charging one credit would break the rounding rule. The service payment always has a ledger entry. The levy has an entry only when it is positive. INV-14 pins both sides of the 19-to-20-minute boundary.
+- **Early grant availability versus conservation (R3, R11).** The early design allowed a configured opening balance so grants could be made before the first levy. R3 names exactly two ways for credits to enter the system and gives no separate rule for an opening balance. A non-zero seed would count as a third source under our conservation model. The adopted design therefore starts the fund at zero and builds it through levies. A grant moves existing fund credits to the recipient. INV-3, INV-4, and INV-12 cover this choice.
+- **Suspension versus honouring existing commitments (R6).** Cancelling every engagement on suspension would also block payment for work already agreed or completed. Suspension blocks new activity and invalidates pending proposals. Existing agreed engagements can still be confirmed or cancelled under their usual rules, and settlement can still credit the suspended helper.
+- **A per-engagement limit versus a daily hours cap (R8).** The team considered limiting a helper's total hours per day, but R8 caps an individual session. The system records work that participants confirm, so it keeps the 480-minute per-engagement limit and does not reserve a helper's daily time. A test should accept two separately agreed 300-minute engagements on the same date when all other checks pass.
 
-## R12 contract tests
+## Rule with no separate state invariant
 
-R12 remains assessed even if it yields no state invariant. Add tests that:
-
-- Attempt to mutate every returned list and set.
-- Confirm the mutation is rejected or affects only the caller's copy.
-- Confirm a previously returned view does not change after later service operations.
-- Confirm a member can query only their own engagement history if that access rule is implemented at the service boundary.
+R1 defines how time is valued across all skills. An hour is worth 60 time credits, so with whole minutes as the unit, one minute maps to one credit. The representation can change as long as this conversion and equal valuation across skills are preserved. We treat R1 as a valuation convention. It adds no separate state predicate. To verify the convention, value a 60-minute session at 60 credits and compare equal-duration sessions in two different skill categories.
 
 ## Rule-to-owner traceability
 
 | Rule | Short meaning | Primary owner | Collaborators | Main invariant or contract |
 | --- | --- | --- | --- | --- |
-| R1 | Equal time value | Benjamin | Matthew | INV-1, INV-10 |
+| R1 | Equal time value | Benjamin | Matthew | Unit and valuation convention |
 | R2 | -180 floor | Benjamin | Matthew, Joe | INV-2, INV-9 |
 | R3 | Valid credit sources and conservation | Benjamin | Moaz, Joe | INV-3, INV-4, INV-12 |
 | R4 | Two confirmations | Matthew | Benjamin, Joe | INV-7, INV-9, INV-10 |
 | R5 | No self-fulfilment | Matthew | Moaz | INV-6 |
-| R6 | Suspension restrictions | Moaz | Matthew, Joe | INV-7, INV-8 |
+| R6 | Suspension restrictions | Moaz | Matthew, Joe | INV-8 |
 | R7 | Append-only ledger | Benjamin | Joe | INV-10, INV-11 |
-| R8 | 0 to 8 hour per-engagement bound | Matthew | Benjamin | INV-1 |
+| R8 | 1 through 480 minutes per engagement | Matthew | Benjamin | INV-1 |
 | R9 | Fulfilment window | Matthew | Joe | INV-5, INV-13 |
-| R10 | 5 percent floor levy paid on top | Benjamin | Matthew | INV-2, INV-3, INV-9, INV-10 |
-| R11 | Community grants | Benjamin | Joe | INV-3, INV-12, INV-13 |
-| R12 | Read-only inspection | Joe coordinates | All managers, Adbus | Interface contract tests |
-| R13 | Fixed configured categories | Matthew | Moaz, Adbus | INV-5 |
+| R10 | 5 percent floor levy paid on top | Benjamin | Matthew, Joe | INV-2, INV-3, INV-9, INV-14 |
+| R11 | Community grants | Benjamin | Joe | INV-3, INV-12, INV-13, INV-15 |
+| R12 | Read-only inspection | Joe coordinates | All managers, Abdus | INV-16 |
+| R13 | Fixed configured categories | Matthew | Moaz, Abdus | INV-5 |
 | R14 | Late cancellation record | Matthew | Benjamin, Joe | INV-9, INV-13 |
 
-## Required mutation evidence
+## Test responsibility
 
-For the viva and report, each invariant needs more than a green test. At least once during development:
+Each owner writes focused tests for the checks inside their own component. Joe owns the shared build and interface checks, the clock and application wiring, and the tests that exercise publication across real components. The first shared integration case should cover member registration and the 120-credit welcome grant, including injected failure and retry. Later cases should exercise selection with a hold, confirmation with settlement, cancellation with release, and suspension with proposal invalidation.
 
-1. Remove or invert the relevant check locally.
-2. Run the named focused test and observe it fail.
-3. Restore the correct code.
-4. Record the enforcement method and final test name in the report table.
-
-Do not commit intentional mutations to the shared branch. A mutation-testing tool is optional. Manual deliberate mutations are sufficient if the team can explain them.
-
-## High-value boundary set
-
-- Duration: 0, 1, 480, 481.
-- Levy: 0, 1, 19, 20, 59, 60, 480.
-- Available balance after a new hold: -179, -180, -181.
-- Multiple engagements on one date: no aggregate hours cap, with each individual duration still tested at 1 and 480 minutes.
-- Window: before earliest, earliest, latest, after latest.
-- Confirmation date: day before, scheduled date, day after.
-- Cancellation for 4 May: 2 May early, 3 May late, 4 May closed.
-- Grant after 3 May: through 3 June blocked, 4 June allowed under the approved rolling policy.
-- Clock: start before minimum, start at minimum, same-day advance, backward move, forward move.
-- Duplicate operations: registration, initialization, proposal, confirmation, settlement, and grant retry.
+When reviewing a boundary test, temporarily removing or inverting the relevant check locally can show that the test catches the regression. Restore the implementation before committing and link the enforcement method and the test in the table once they exist.

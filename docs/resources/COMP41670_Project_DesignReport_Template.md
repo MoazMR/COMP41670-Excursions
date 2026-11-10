@@ -64,19 +64,13 @@ What did you test, at what level, and why that split? Show how the invariant lis
 
 ### Where the suite is weakest, and what you would test next
 
-## 5. AI use - summary
-
-The full record is in your AI Usage Log. Here, in half a page: where AI helped most, where it produced something plausible but wrong, and how you caught it. The specific example is what earns marks.
-
-### Summary
-
-## 6. Known limitations
+## 5. Known limitations
 
 What does not work, what is unfinished, and what you would change with another two weeks. Honesty is marked positively here; a report claiming a flawless system that the markers can break in five minutes is marked negatively.
 
 ### Limitations
 
-## 7. Contribution statement
+## 6. Contribution statement
 
 For each member, two or three lines on what they owned. This is read alongside the commit history and is used in the individual vivas.
 
@@ -88,7 +82,7 @@ For each member, two or three lines on what they owned. This is read alongside t
 |  |  |  |
 |  |  |  |
 
-## 8. Post-delivery reflection
+## 7. Post-delivery reflection
 
 Half a page, written after the code is finished. What would you do differently if you started this project again on Monday? Answer as engineers, not as students - the interesting answer is about process and judgement, not about time management.
 
