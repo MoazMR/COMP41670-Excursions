@@ -1,5 +1,7 @@
 # Core sequence flows
 
+These diagrams describe the intended workflows. CLI-to-service calls use the names and argument order in [MeithealService.java](../../app/src/main/java/ie/ucd/meitheal/app/MeithealService.java). Actions entered by users describe intent. Manager messages describe each owner's responsibility. A note spanning two owners shows the outcome that callers must observe together. The service holds one lock while the managers prepare both changes and make them visible together. [Shared caller contracts](SharedContracts.md) and [architecture decisions](Architecture.md#how-managers-make-a-change-together)
+
 ## Registration and welcome grant
 
 ```mermaid
@@ -9,20 +11,27 @@ sequenceDiagram
     participant Service as MeithealService
     participant Members as MemberManager
     participant Ledger as LedgerManager
+    participant Clock as SimulatedClock
+    participant IDs as IdFactory
 
-    User->>CLI: register name and email
-    CLI->>Service: registerMember(name, email)
-    Service->>Members: validate and prepare ACTIVE member
-    Members-->>Service: prepared MemberId
-    Service->>Ledger: prepare welcome grant(MemberId)
-    alt all preparation succeeds
-        Service->>Members: commit member
-        Service->>Ledger: commit 120-credit transaction
-        Service-->>CLI: MemberView
-    else validation or grant fails
-        Service-->>CLI: failure with no state change
+    User->>CLI: Register with name and email
+    CLI->>Service: register(name, email)
+    Service->>IDs: newMemberId()
+    Service->>Members: Validate name, email and canonical email uniqueness, prepare ACTIVE member for this ID
+    alt Invalid input or duplicate email
+        Service-->>CLI: MALFORMED_INPUT or DUPLICATE_EMAIL
+    else Valid new member
+        Service->>Clock: currentDate()
+        Service->>IDs: newTransactionId()
+        Service->>Ledger: Prepare 120-credit entry with member ID, transaction ID and simulated date
+        alt Registration succeeds
+            Note over Members,Ledger: ACTIVE member and one welcome transaction become visible together
+            Service-->>CLI: MemberView
+        else Uncommitted technical failure
+            Note over Members,Ledger: Neither record is visible. Registration can be retried.
+            Service-->>CLI: ATOMIC_OPERATION_FAILED
+        end
     end
-    CLI-->>User: render result
 ```
 
 ## Matching and proposal submission
@@ -35,21 +44,29 @@ sequenceDiagram
     participant Members as MemberManager
     participant Work as EngagementManager
     participant Clock as SimulatedClock
+    participant IDs as IdFactory
 
-    Helper->>CLI: find-matches
-    CLI->>Service: findMatchingRequests(helperId)
+    Helper->>CLI: Find matching requests
+    CLI->>Service: matchingRequests(helperId)
     Service->>Clock: currentDate()
-    Service->>Members: require active helper and requesters
-    Service->>Work: calculate eligible open requests
-    Work-->>Service: immutable candidates
-    Service-->>CLI: candidates
-    Note over Work: Read-only. No proposal or reservation exists yet.
-    Helper->>CLI: submit-proposal(requestId, date)
-    CLI->>Service: submitProposal(helperId, requestId, date)
-    Service->>Members: recheck active members
-    Service->>Work: validate and store PENDING proposal
-    Note over Work: No aggregate helper daily-hours reservation applies.
-    Service-->>CLI: ProposalView or failure
+    Service->>Members: Check member eligibility and skills
+    Service->>Work: matchingRequests(helperId)
+    Work-->>Service: Immutable snapshot of eligible open requests or rejection
+    Service-->>CLI: Matching result
+    Note over Work: The query creates no proposal or reservation.
+    Helper->>CLI: Propose a date for a request
+    CLI->>Service: submitProposal(helperId, requestId, proposedDate)
+    Service->>Members: Recheck active helper and requester
+    alt Eligible members
+        Service->>IDs: newProposalId()
+        Service->>Work: submitProposal(helperId, requestId, proposalId, proposedDate)
+        Work->>Work: Check request, date and pending proposal uniqueness
+        Work-->>Service: PENDING ProposalView or rejection
+        Service-->>CLI: Proposal result
+    else Member check fails
+        Service-->>CLI: Rejection
+    end
+    Note over Work: A pending proposal reserves no helper hours.
 ```
 
 ## Proposal selection and agreement
@@ -64,52 +81,57 @@ sequenceDiagram
     participant Ledger as LedgerManager
     participant IDs as IdFactory
 
-    Requester->>CLI: select-proposal(proposalId)
+    Requester->>CLI: Select a proposal
     CLI->>Service: selectProposal(requesterId, proposalId)
-    Service->>Members: recheck active requester and helper
-    Service->>Work: validate open request and pending proposal
-    Service->>IDs: new EngagementId
-    Service->>Ledger: prepare hold(payment + levy)
-    Ledger->>Ledger: require available balance >= -180
-    Service->>Work: prepare selection, closure, rejection, engagement
-    alt all preparation succeeds
-        Service->>Ledger: commit HELD hold
-        Service->>Work: commit prepared work state
-        Service-->>CLI: EngagementView
-    else any check or staging fails
-        Service-->>CLI: failure with no state change
+    Service->>Work: Check requester ownership, open request and pending proposal
+    Service->>Members: Check that requester and helper are active
+    alt Selection is eligible
+        Service->>IDs: newEngagementId()
+        Service->>Ledger: Check available balance after holding payment plus levy
+        alt Hold would leave less than -180
+            Service-->>CLI: INSUFFICIENT_AVAILABLE_CREDITS
+        else Selection succeeds
+            Note over Work,Ledger: AGREED engagement and HELD reservation become visible together
+            Note over Work: Close the request, select this proposal and reject competing pending proposals in the same change.
+            Service-->>CLI: EngagementView
+        else Uncommitted technical failure
+            Service-->>CLI: ATOMIC_OPERATION_FAILED
+        end
+    else Ownership, state or membership check fails
+        Service-->>CLI: Rejection
     end
+    Note over Work,Ledger: A failed selection preserves the request, proposals, engagements and holds.
 ```
 
 ## Two confirmations and settlement
 
 ```mermaid
 sequenceDiagram
-    actor Participant
+    actor Person as Participant
     participant CLI
     participant Service as MeithealService
     participant Work as EngagementManager
     participant Ledger as LedgerManager
     participant Clock as SimulatedClock
 
-    Participant->>CLI: confirm-completion(engagementId)
-    CLI->>Service: confirmCompletion(engagementId, actorId)
+    Person->>CLI: Confirm completion
+    CLI->>Service: confirmEngagement(participantId, engagementId)
     Service->>Clock: currentDate()
-    Service->>Work: validate participant, date, state, duplicate
-    alt first confirmation
-        Service->>Work: record actor only
-        Service-->>CLI: awaiting other participant
-    else second confirmation
-        Service->>Ledger: prepare settlement by engagement ID
-        Ledger->>Ledger: prepare service payment and any positive levy transaction
-        Service->>Work: prepare second confirmation and COMPLETED
-        alt settlement preparation and commit succeed
-            Service->>Ledger: commit prepared transactions and SETTLED hold
-            Service->>Work: commit confirmation and COMPLETED
-            Service-->>CLI: completed EngagementView
-        else technical failure
+    Service->>Work: Check participant, date, engagement state and prior confirmations
+    alt Confirmation is invalid or repeated
+        Service-->>CLI: Rejection, including DUPLICATE for a repeated first confirmation
+    else First distinct confirmation
+        Service->>Work: Record the actor and keep the engagement AGREED
+        Service-->>CLI: EngagementView
+    else Second distinct confirmation
+        Service->>Ledger: Prepare settlement of this engagement's hold
+        alt Settlement succeeds
+            Note over Work,Ledger: Second confirmation, COMPLETED engagement and SETTLED hold become visible together
+            Note over Ledger: Record one service payment and a levy entry only if the levy is positive.
+            Service-->>CLI: EngagementView
+        else Uncommitted technical failure
+            Note over Work,Ledger: Only the first confirmation remains. The hold stays HELD and no settlement entries appear.
             Service-->>CLI: ATOMIC_OPERATION_FAILED
-            Note over Work,Ledger: No second confirmation, no transaction, hold remains HELD
         end
     end
 ```
@@ -118,25 +140,56 @@ sequenceDiagram
 
 ```mermaid
 sequenceDiagram
-    actor Participant
+    actor Person as Participant
     participant CLI
     participant Service as MeithealService
     participant Work as EngagementManager
     participant Ledger as LedgerManager
     participant Clock as SimulatedClock
 
-    Participant->>CLI: cancel-engagement(engagementId)
-    CLI->>Service: cancelEngagement(engagementId, actorId)
+    Person->>CLI: Cancel an engagement
+    CLI->>Service: cancelEngagement(participantId, engagementId)
     Service->>Clock: currentDate()
-    Service->>Work: validate participant, AGREED, today before date
-    Service->>Ledger: prepare hold release
-    Service->>Work: prepare cancellation record and state change
-    alt valid and all preparation succeeds
-        Service->>Ledger: commit RELEASED hold
-        Service->>Work: commit CANCELLED and cancellation record
-        Service-->>CLI: cancelled EngagementView
-    else invalid or technical failure
-        Service-->>CLI: failure with no state change
+    Service->>Work: Check participant, AGREED state and date before scheduled day
+    alt Invalid participant, state or date
+        Service-->>CLI: NOT_PARTICIPANT, INVALID_STATE or CANCELLATION_CLOSED
+    else Cancellation permitted
+        Service->>Ledger: Prepare release of the engagement hold
+        alt Cancellation succeeds
+            Note over Work,Ledger: CANCELLED engagement, cancellation record and RELEASED hold become visible together
+            Note over Work: Record actor and date. Cancellation on the preceding day is late.
+            Note over Ledger: Releasing the hold creates no transfer.
+            Service-->>CLI: EngagementView
+        else Uncommitted technical failure
+            Note over Work,Ledger: Engagement stays AGREED, hold stays HELD and no cancellation is recorded.
+            Service-->>CLI: ATOMIC_OPERATION_FAILED
+        end
+    end
+```
+
+## Suspension and pending proposals
+
+```mermaid
+sequenceDiagram
+    participant CLI
+    participant Service as MeithealService
+    participant Members as MemberManager
+    participant Work as EngagementManager
+
+    CLI->>Service: suspendMember(memberId)
+    Service->>Members: Check member exists and can be suspended
+    alt Unknown or already suspended
+        Service-->>CLI: Rejection
+    else Eligible for suspension
+        Service->>Work: Identify pending proposals involving this helper or requester
+        alt Suspension succeeds
+            Note over Members,Work: SUSPENDED status and invalidation of those proposals become visible together
+            Note over Work: Existing AGREED engagements still allow ordinary confirmation, settlement and cancellation.
+            Service-->>CLI: MemberView
+        else Uncommitted technical failure
+            Note over Members,Work: Member status and pending proposals are preserved.
+            Service-->>CLI: ATOMIC_OPERATION_FAILED
+        end
     end
 ```
 
@@ -150,15 +203,16 @@ sequenceDiagram
     participant Ledger as LedgerManager
     participant Clock as SimulatedClock
 
-    Member->>CLI: apply-grant(amount)
+    Member->>CLI: Apply for a grant
     CLI->>Service: applyForCommunityGrant(memberId, amount)
     Service->>Clock: currentDate()
-    Service->>Ledger: validate positive amount, actual balance, fund, date
-    alt approved
-        Ledger->>Ledger: transfer fund to member and append transaction
+    Service->>Ledger: Check positive amount, negative actual ledger balance and sufficient fund credits
+    Ledger->>Ledger: For repeat grants, require today strictly after last approval plus one month
+    alt Approved
+        Ledger->>Ledger: Transfer fund credits, append the grant transaction and update the approval date
         Ledger-->>Service: CommunityGrantView
-    else denied
-        Ledger-->>Service: failure and no state change
+    else Denied
+        Ledger-->>Service: Rejection with balances, history and last approval date preserved
     end
-    Service-->>CLI: result
+    Service-->>CLI: Grant result
 ```

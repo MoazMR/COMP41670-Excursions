@@ -75,6 +75,6 @@ flowchart LR
     X[CANCELLED engagement] <--> R[RELEASED hold]
 
     C --> T1[SERVICE_PAYMENT transaction]
-    C --> T2[COMMUNITY_LEVY transaction]
+    C -->|Only if the levy is positive| T2[COMMUNITY_LEVY transaction]
     X --> N[No settlement transaction]
 ```
