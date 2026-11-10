@@ -18,7 +18,7 @@ This split gives each person a clear subsystem while Joe owns integration, share
 | --- | --- | --- |
 | R1 - 60 credits per hour | Benjamin | Matthew supplies the validated session duration. |
 | R2 - overdraft floor | Benjamin | Matthew provides validated engagement data; Joe coordinates hold and settlement flows. |
-| R3 - permitted credit creation | Benjamin | Moaz stages successful registration; Joe verifies the full registration flow. The initial fund is zero unless a binding clarification and recorded amendment permit otherwise. |
+| R3 - permitted credit creation | Benjamin | Moaz stages successful registration; Joe verifies the full registration flow. The initial fund is zero. |
 | R4 - two confirmations before transfer | Matthew | Benjamin guarantees settlement is atomic and cannot run twice; Joe coordinates the operation. |
 | R5 - no self-fulfilment | Matthew | Moaz supplies stable member identity and active-status checks. |
 | R6 - suspended-member restrictions | Moaz | Matthew invalidates pending proposals but preserves agreed work. |
@@ -33,7 +33,7 @@ This split gives each person a clear subsystem while Joe owns integration, share
 
 ## Integration contracts
 
-- Joe defines shared interfaces and domain records before subsystem implementation diverges. Parameter meaning, ownership, errors, and amendments must be agreed.
+- Joe defines shared interfaces and domain records before subsystem implementation diverges. Use the inputs, owners and failure rules in [SharedContracts.md](SharedContracts.md#inputs-for-coordinated-changes).
 - `MemberManager` owns member identity, canonical email lookup, status, and member-category publications. Other modules query it and must not duplicate member state.
 - `LedgerManager` is the only component that changes balances, holds, transactions, or the community-fund balance.
 - Registration succeeds only when the member and one 120-credit welcome grant are both created. A failure leaves neither visible.
