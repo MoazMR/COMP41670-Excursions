@@ -1,6 +1,15 @@
 # Shared caller contracts
 
-This document describes the contracts visible to callers of `MeithealService` and the console. It maps ownership and consumers, and records stable results and date-sensitive examples. It does not prescribe publication mechanics.
+A shared contract tells a caller what it can pass in, what comes back, what may change, and what remains true when a call fails. Use the Java declarations for method names and types. Use this document for the behavior and ownership that a signature alone cannot describe. [Architecture.md](Architecture.md) explains the design choices behind these boundaries.
+
+## What is available now
+
+| Surface | Where to build against it | What is still missing from the baseline |
+| --- | --- | --- |
+| Service API consumed by the CLI | [`MeithealService`](../../app/src/main/java/ie/ucd/meitheal/app/MeithealService.java) declares caller operations, including registration, requests, selection, settlement, and grants. | Concrete service and runtime wiring. CLI parsing, dispatch, and rendering can be tested against a substitute service. |
+| Manager interfaces consumed by the service | [`MemberManagerPort`](../../shared/src/main/java/ie/ucd/meitheal/shared/port/MemberManagerPort.java), [`EngagementManagerPort`](../../shared/src/main/java/ie/ucd/meitheal/shared/port/EngagementManagerPort.java), and [`LedgerManagerPort`](../../shared/src/main/java/ie/ucd/meitheal/shared/port/LedgerManagerPort.java). | The ports declare reads and some owner-local writes. Registration, hold and settlement publication, and other coordinated writes still need owner-side Java declarations. A caller method in `MeithealService` does not imply those manager methods exist. |
+| Shared vocabulary and dependencies | [Shared Java types](../../shared/src/main/java/ie/ucd/meitheal/shared) provide IDs, views, results, failure codes, the catalogue interface, a simulated clock interface, and an ID factory interface. | Concrete catalogue, clock, and ID providers and their bindings. |
+
 
 ## Ownership and consumers
 
@@ -68,4 +77,18 @@ These codes are distinct caller results; the service declarations identify the a
 
 ## Cross-owner failure contract
 
-For an operation coordinated across owners, validation failure or an uncommitted technical failure preserves both owners' observable state. In particular, callers must not observe a member without its welcome grant, an engagement without its corresponding hold, a completed engagement without settlement, or a cancelled engagement with a still-held balance. A technical failure before commit returns a stable failure result and leaves the operation retryable. Successful calls expose the corresponding owner state consistently. These are caller contracts; the mechanism used to prepare, commit, or publish state is an implementation choice.
+For an operation coordinated across owners, validation failure or an uncommitted technical failure preserves both owners' observable state. In particular, callers must not observe a member without its welcome grant, an engagement without its corresponding hold, a completed engagement without settlement, or a cancelled engagement with a still-held balance. A technical failure before commit returns a stable failure result and leaves the operation retryable. Successful calls expose the corresponding owner state consistently. The [architecture decision](Architecture.md#team-decision-before-pairing-managers) explains what still needs agreement about preparation and publication.
+
+| Joint operation | Successful state visible to callers | Failure case to verify with the real components |
+| --- | --- | --- |
+| Registration | One active member and one 120-credit welcome grant. | Fail welcome-grant publication and verify that neither the member nor the grant is visible. Retry and verify exactly one of each. |
+| Proposal selection | One agreed engagement, one hold for the full charge, and competing proposals closed. | Attempt a hold that would leave -181 available. Verify the request remains open, the proposals are unchanged, and there is no engagement or hold. |
+| Second completion confirmation | Both confirmations recorded and the engagement settled once with its matching ledger entries. | Fail settlement after the first confirmation. Verify the first confirmation and hold remain, while the second confirmation and settlement entries are absent. Retry and verify one settlement. |
+| Cancellation | The engagement is cancelled, the cancellation is recorded, and the hold is released without a transfer. | Fail hold release. Verify the engagement remains agreed, the original hold remains, and no cancellation record or transfer appears. |
+| Suspension | The member is suspended and pending proposals involving that member are invalidated. Existing agreed work remains available under its usual rules. | Fail proposal invalidation. Verify member status and pending proposals are unchanged. |
+
+## Shared changes to agree together
+
+- **Registration first.** Moaz, Benjamin, and Joe agree the preparation inputs, who supplies the ID and date, how each side reports failure, and the publication boundary. Keep the public result and retry behavior consistent with the registration contract above.
+- **Lifecycle next.** Matthew, Benjamin, and Joe agree the identifiers and state needed for selection, hold, release, and settlement. Moaz and Matthew agree the eligibility reads and the suspension and proposal-invalidation boundary.
+- **Caller changes.** If a Java signature, result code, or observable result changes, agree it with the owner and its consumers, including Abdus for CLI-facing changes. Update the Java declaration, this document where the behavior changes, and the focused test in the same change.
