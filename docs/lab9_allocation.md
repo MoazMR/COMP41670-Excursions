@@ -20,7 +20,7 @@ Benjamin's Lab 9 work is limited to the ledger welcome-grant path and must not c
 
 At allocation time, only the Gradle setup and Moaz's newly implemented `member-manager` production code were present on the branch. The lab brief permits choosing the best available candidate when the codebase is still too small for a mature hotspot. `MemberManager.java` is the strongest available candidate because it has the highest production Java churn count (2) and contains the longest and highest-decision-count workflow in the current codebase.
 
-Benjamin's quantified selection and inspection method are recorded in `lab9/hotspot.md`.
+Benjamin's quantified selection and inspection method are recorded in [his hotspot report](lab9/ben/hotspot.md).
 
 ## Interim parallel-work constraint
 
