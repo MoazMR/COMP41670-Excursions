@@ -1,8 +1,12 @@
 # Gradle caches and build outputs
-/.gradle/
-/build/
-/*/build/
+.gradle/
+**/build/
 
 # Module compiler output and local macOS metadata
 /*/bin/
 .DS_Store
+
+# Local IDE files
+.idea/
+*.iml
+out/
