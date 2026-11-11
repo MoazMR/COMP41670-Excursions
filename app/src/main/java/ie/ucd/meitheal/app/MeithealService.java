@@ -6,7 +6,6 @@ import ie.ucd.meitheal.shared.id.MemberId;
 import ie.ucd.meitheal.shared.id.ProposalId;
 import ie.ucd.meitheal.shared.id.RequestId;
 import ie.ucd.meitheal.shared.result.Result;
-import ie.ucd.meitheal.shared.view.BalanceView;
 import ie.ucd.meitheal.shared.view.CategoryView;
 import ie.ucd.meitheal.shared.view.CommunityGrantView;
 import ie.ucd.meitheal.shared.view.EngagementView;
@@ -26,17 +25,7 @@ import java.util.List;
  * Cross-owner operations preserve all affected observable state on rejection or an uncommitted
  * technical failure; the latter is reported as ATOMIC_OPERATION_FAILED and may be retried.
  */
-public interface MeithealService {
-    /**
-     * Invalid names or emails fail as MALFORMED_INPUT; duplicate canonical email fails as DUPLICATE_EMAIL.
-     * Registration publishes the member and 120-credit welcome grant together, or neither.
-     */
-    Result<MemberView> register(String name, String email);
-
-    Result<MemberView> findMember(MemberId memberId);
-
-    /** Applies the membership owner's canonical email rules. */
-    Result<MemberView> findMemberByEmail(String email);
+public interface MeithealService extends RegistrationService {
 
     /**
      * Unknown members fail with MEMBER_NOT_FOUND; repeating the current status is rejected.
@@ -110,8 +99,6 @@ public interface MeithealService {
      * INSUFFICIENT_COMMUNITY_FUND_CREDITS.
      */
     Result<CommunityGrantView> applyForCommunityGrant(MemberId memberId, long amount);
-
-    Result<BalanceView> balance(MemberId memberId);
 
     /** Returns immutable ledger history for a member. */
     Result<List<TransactionView>> memberLedgerHistory(MemberId memberId);

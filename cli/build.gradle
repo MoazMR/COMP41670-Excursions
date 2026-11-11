@@ -2,3 +2,13 @@
 dependencies {
     implementation project(':app')
 }
+
+apply plugin: 'application'
+
+application {
+    mainClass = 'ie.ucd.meitheal.cli.Main'
+}
+
+tasks.named('run') {
+    standardInput = System.in
+}

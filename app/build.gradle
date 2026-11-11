@@ -1,3 +1,5 @@
 dependencies {
     api project(':shared')
+    implementation project(':member-manager')
+    implementation project(':ledger-manager')
 }
