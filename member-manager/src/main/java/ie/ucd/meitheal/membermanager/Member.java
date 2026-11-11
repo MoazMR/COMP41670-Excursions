@@ -2,6 +2,7 @@ package ie.ucd.meitheal.membermanager;
 
 import java.util.Objects;
 import java.util.Set;
+import ie.ucd.meitheal.shared.id.MemberId;
 
 public record Member(
         MemberId id,

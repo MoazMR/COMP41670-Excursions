@@ -5,7 +5,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Set;
-import java.util.UUID;
+import ie.ucd.meitheal.shared.id.MemberId;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -27,11 +27,13 @@ class MemberManagerTest {
 
     @Test
     void registrationTrimsDataAndKeepsPreparedMemberInvisibleUntilCommit() {
-        var prepared = members.prepareRegistration("  Alex Smith  ", "  Alex@Example.com ");
+        var assignedId = id("100001");
+        var prepared = members.prepareRegistration(assignedId, "  Alex Smith  ", "  Alex@Example.com ");
 
         assertEquals("Alex Smith", prepared.member().name());
         assertEquals("Alex@Example.com", prepared.member().email().value());
         assertEquals(MemberStatus.ACTIVE, prepared.member().status());
+        assertEquals(assignedId, prepared.memberId());
         assertTrue(members.findById(prepared.memberId()).isEmpty());
         assertTrue(members.findByEmail("alex@example.com").isEmpty());
 
@@ -45,51 +47,85 @@ class MemberManagerTest {
     @Test
     void registrationRejectsInvalidNamesAndEmailsWithoutChangingState() {
         assertCode(MemberManagerException.Code.INVALID_NAME,
-                () -> members.prepareRegistration(" \t ", "alex@example.com"));
+                () -> members.prepareRegistration(id("100001"), " \t ", "alex@example.com"));
         assertCode(MemberManagerException.Code.INVALID_NAME,
-                () -> members.prepareRegistration(null, "alex@example.com"));
+                () -> members.prepareRegistration(id("100001"), null, "alex@example.com"));
 
         for (var email : List.of(
                 "", "   ", "not-an-email", "alex@", "@example.com", "alex@example",
                 "a..b@example.com", "alex@-example.com")) {
             assertCode(MemberManagerException.Code.INVALID_EMAIL,
-                    () -> members.prepareRegistration("Alex", email));
+                    () -> members.prepareRegistration(id("100001"), "Alex", email));
         }
 
         assertTrue(members.getMembers().isEmpty());
-        var valid = members.prepareRegistration("Alex", "alex@example.com");
+        var valid = members.prepareRegistration(id("100001"), "Alex", "alex@example.com");
         assertNotNull(valid);
         members.abortRegistration(valid);
     }
 
     @Test
     void duplicateCanonicalEmailIsRejectedForCommittedAndPreparedMembers() {
-        var prepared = members.prepareRegistration("Alex", "  Alex@Example.com ");
+        var prepared = members.prepareRegistration(id("100001"), "Alex", "  Alex@Example.com ");
         assertCode(MemberManagerException.Code.DUPLICATE_EMAIL,
-                () -> members.prepareRegistration("Other", "alex@example.COM"));
+                () -> members.prepareRegistration(id("100002"), "Other", "alex@example.COM"));
         assertTrue(members.getMembers().isEmpty());
         members.commitRegistration(prepared);
 
         assertCode(MemberManagerException.Code.DUPLICATE_EMAIL,
-                () -> members.prepareRegistration("Other", " ALEX@example.com "));
+                () -> members.prepareRegistration(id("100002"), "Other", " ALEX@example.com "));
         assertEquals(1, members.getMembers().size());
         assertEquals("Alex", members.findByEmail(" alex@EXAMPLE.com ").orElseThrow().name());
     }
 
     @Test
     void abortingRegistrationReleasesCanonicalEmailReservation() {
-        var prepared = members.prepareRegistration("Alex", "alex@example.com");
+        var prepared = members.prepareRegistration(id("100001"), "Alex", "alex@example.com");
         members.abortRegistration(prepared);
 
-        var replacement = members.prepareRegistration("Another Alex", " ALEX@EXAMPLE.COM ");
-        assertNotEquals(prepared.memberId(), replacement.memberId());
+        var replacement = members.prepareRegistration(id("100001"), "Another Alex", " ALEX@EXAMPLE.COM ");
+        assertEquals(prepared.memberId(), replacement.memberId());
         assertTrue(members.getMembers().isEmpty());
         members.abortRegistration(replacement);
     }
 
     @Test
+    void duplicatePendingIdDoesNotReserveEmailAndAbortAllowsSameIdRetry() {
+        var first = members.prepareRegistration(id("100001"), "First", "first@example.com");
+        assertCode(MemberManagerException.Code.INVALID_REGISTRATION,
+                () -> members.prepareRegistration(id("100001"), "Second", "second@example.com"));
+
+        var differentIdCanUseEmailFromFailedAttempt = members.prepareRegistration(
+                id("100002"), "Second", "second@example.com");
+        members.abortRegistration(differentIdCanUseEmailFromFailedAttempt);
+        members.abortRegistration(first);
+
+        var retry = members.prepareRegistration(id("100001"), "Retry", "first@example.com");
+        assertEquals("100001", retry.memberId().value());
+        members.abortRegistration(retry);
+    }
+
+    @Test
+    void duplicateEmailTakesPrecedenceOverPendingIdReuse() {
+        members.prepareRegistration(id("100001"), "First", "first@example.com");
+
+        assertCode(MemberManagerException.Code.DUPLICATE_EMAIL,
+                () -> members.prepareRegistration(id("100001"), "Second", "first@example.com"));
+    }
+
+    @Test
+    void committedIdCannotBeReusedAndFailedReuseLeavesNewEmailFree() {
+        members.commitRegistration(members.prepareRegistration(id("100001"), "First", "first@example.com"));
+
+        assertCode(MemberManagerException.Code.INVALID_REGISTRATION,
+                () -> members.prepareRegistration(id("100001"), "Second", "second@example.com"));
+        var valid = members.prepareRegistration(id("100002"), "Second", "second@example.com");
+        assertEquals("100002", members.commitRegistration(valid).id().value());
+    }
+
+    @Test
     void registrationTokensCannotBeCommittedOrAbortedMoreThanOnceOrByAnotherManager() {
-        var prepared = members.prepareRegistration("Alex", "alex@example.com");
+        var prepared = members.prepareRegistration(id("100001"), "Alex", "alex@example.com");
         var otherManager = new MemberManager(Set.of(GARDENING));
 
         assertCode(MemberManagerException.Code.INVALID_REGISTRATION,
@@ -129,7 +165,7 @@ class MemberManagerTest {
     @Test
     void failedMemberLookupsAndStateTransitionsDoNotChangeState() {
         var member = register("alex@example.com");
-        var unknown = new MemberId(UUID.randomUUID());
+        var unknown = id("999999");
 
         assertCode(MemberManagerException.Code.MEMBER_NOT_FOUND, () -> members.suspend(unknown));
         assertCode(MemberManagerException.Code.MEMBER_NOT_FOUND, () -> members.reinstate(unknown));
@@ -207,7 +243,11 @@ class MemberManagerTest {
     }
 
     private Member register(String email) {
-        return members.commitRegistration(members.prepareRegistration("Alex", email));
+        return members.commitRegistration(members.prepareRegistration(id("100001"), "Alex", email));
+    }
+
+    private MemberId id(String value) {
+        return new MemberId(value);
     }
 
     private void assertCode(MemberManagerException.Code expected, Runnable action) {

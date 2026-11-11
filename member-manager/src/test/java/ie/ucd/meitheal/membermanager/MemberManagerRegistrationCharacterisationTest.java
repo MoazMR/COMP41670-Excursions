@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Set;
+import ie.ucd.meitheal.shared.id.MemberId;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -20,21 +21,21 @@ class MemberManagerRegistrationCharacterisationTest {
 
     @Test
     void preparedRegistrationIsInvisibleButReservesItsCanonicalEmail() {
-        var prepared = members.prepareRegistration("  Alex Smith  ", " Alex@Example.com ");
+        var prepared = members.prepareRegistration(id("100001"), "  Alex Smith  ", " Alex@Example.com ");
 
         assertTrue(members.getMembers().isEmpty());
         assertTrue(members.findById(prepared.memberId()).isEmpty());
         assertTrue(members.findByEmail("alex@example.com").isEmpty());
 
         var duplicate = assertThrows(MemberManagerException.class,
-                () -> members.prepareRegistration("Other", " ALEX@example.COM "));
+                () -> members.prepareRegistration(id("100002"), "Other", " ALEX@example.COM "));
         assertEquals(MemberManagerException.Code.DUPLICATE_EMAIL, duplicate.code());
         assertTrue(members.getMembers().isEmpty());
     }
 
     @Test
     void commitPublishesTheExactPreparedMemberAndConsumesTheToken() {
-        var prepared = members.prepareRegistration(" Alex ", " Alex@Example.com ");
+        var prepared = members.prepareRegistration(id("100001"), " Alex ", " Alex@Example.com ");
 
         var committed = members.commitRegistration(prepared);
 
@@ -52,7 +53,7 @@ class MemberManagerRegistrationCharacterisationTest {
 
     @Test
     void abortConsumesTheTokenAndReleasesTheCanonicalEmail() {
-        var prepared = members.prepareRegistration("Alex", "alex@example.com");
+        var prepared = members.prepareRegistration(id("100001"), "Alex", "alex@example.com");
 
         members.abortRegistration(prepared);
 
@@ -61,13 +62,13 @@ class MemberManagerRegistrationCharacterisationTest {
         assertEquals(MemberManagerException.Code.INVALID_REGISTRATION, repeated.code());
         assertTrue(members.getMembers().isEmpty());
 
-        var replacement = members.prepareRegistration("Replacement", " ALEX@EXAMPLE.COM ");
+        var replacement = members.prepareRegistration(id("100001"), "Replacement", " ALEX@EXAMPLE.COM ");
         assertEquals("Replacement", replacement.member().name());
     }
 
     @Test
     void foreignManagerRejectsPreparedTokenWithoutChangingEitherManager() {
-        var prepared = members.prepareRegistration("Alex", "alex@example.com");
+        var prepared = members.prepareRegistration(id("100001"), "Alex", "alex@example.com");
         var other = new MemberManager(Set.of(new CategoryId("gardening")));
 
         var exception = assertThrows(MemberManagerException.class,
@@ -82,11 +83,15 @@ class MemberManagerRegistrationCharacterisationTest {
     @Test
     void invalidNameTakesPrecedenceOverInvalidEmailWithoutChangingState() {
         var exception = assertThrows(MemberManagerException.class,
-                () -> members.prepareRegistration("   ", "not-an-email"));
+                () -> members.prepareRegistration(id("100001"), "   ", "not-an-email"));
 
         assertEquals(MemberManagerException.Code.INVALID_NAME, exception.code());
         assertEquals("Member name must not be blank", exception.getMessage());
         assertNull(exception.getCause());
         assertTrue(members.getMembers().isEmpty());
+    }
+
+    private MemberId id(String value) {
+        return new MemberId(value);
     }
 }

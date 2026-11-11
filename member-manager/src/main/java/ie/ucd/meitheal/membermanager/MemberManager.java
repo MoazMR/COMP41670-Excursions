@@ -10,6 +10,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import ie.ucd.meitheal.shared.id.MemberId;
 import java.util.UUID;
 
 public final class MemberManager {
@@ -31,13 +32,18 @@ public final class MemberManager {
         this.configuredCategories = Set.copyOf(categories);
     }
 
-    public synchronized PreparedRegistration prepareRegistration(String name, String email) {
+    public synchronized PreparedRegistration prepareRegistration(MemberId memberId, String name, String email) {
         var normalizedName = normalizeAndValidateName(name);
         var address = parseEmail(email);
         var canonicalEmail = address.canonicalValue();
         requireEmailAvailable(canonicalEmail);
+        if (memberId == null || membersById.containsKey(memberId)
+                || preparedRegistrations.values().stream().anyMatch(reg -> reg.memberId().equals(memberId))) {
+            throw failure(MemberManagerException.Code.INVALID_REGISTRATION,
+                    "Member ID is null, committed, or already reserved");
+        }
 
-        var member = new Member(nextMemberId(), normalizedName, address, MemberStatus.ACTIVE, Set.of());
+        var member = new Member(memberId, normalizedName, address, MemberStatus.ACTIVE, Set.of());
         var registration = new PreparedRegistration(UUID.randomUUID(), member);
         preparedRegistrations.put(registration.token(), registration);
         reservationTokensByCanonicalEmail.put(canonicalEmail, registration.token());
@@ -171,20 +177,6 @@ public final class MemberManager {
                     "Registration is unknown, already completed, or belongs to another manager");
         }
         return registration;
-    }
-
-    private MemberId nextMemberId() {
-        while (true) {
-            var candidate = MemberId.create();
-            if (isMemberIdAvailable(candidate)) {
-                return candidate;
-            }
-        }
-    }
-
-    private boolean isMemberIdAvailable(MemberId candidate) {
-        return !membersById.containsKey(candidate)
-                && preparedRegistrations.values().stream().noneMatch(reg -> reg.memberId().equals(candidate));
     }
 
     private EmailAddress parseEmail(String email) {

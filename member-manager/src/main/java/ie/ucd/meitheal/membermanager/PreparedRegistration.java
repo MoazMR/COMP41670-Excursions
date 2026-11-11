@@ -2,6 +2,7 @@ package ie.ucd.meitheal.membermanager;
 
 import java.util.Objects;
 import java.util.UUID;
+import ie.ucd.meitheal.shared.id.MemberId;
 
 public final class PreparedRegistration {
     private final UUID token;
