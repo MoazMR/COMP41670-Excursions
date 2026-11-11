@@ -1,7 +1,7 @@
 package ie.ucd.meitheal.ledger;
 
-import ie.ucd.meitheal.ledger.local.MemberId;
-import ie.ucd.meitheal.ledger.local.TransactionId;
+import ie.ucd.meitheal.shared.id.MemberId;
+import ie.ucd.meitheal.shared.id.TransactionId;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Method;
@@ -14,12 +14,13 @@ import java.util.stream.Collectors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class LedgerManagerTest {
-    private static final MemberId ALICE = new MemberId("alice");
-    private static final MemberId BOB = new MemberId("bob");
+    private static final MemberId ALICE = new MemberId("100001");
+    private static final MemberId BOB = new MemberId("100002");
     private static final LocalDate GRANT_DATE = LocalDate.of(2026, 11, 8);
 
     @Test
@@ -71,7 +72,7 @@ class LedgerManagerTest {
 
         Transaction transaction = ledger.grantWelcome(ALICE);
 
-        assertEquals(id, transaction.transactionId());
+        assertSame(id, transaction.transactionId());
         assertEquals(date, transaction.date());
     }
 

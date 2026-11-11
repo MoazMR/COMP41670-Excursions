@@ -1,6 +1,6 @@
 package ie.ucd.meitheal.ledger;
 
-import ie.ucd.meitheal.ledger.local.MemberId;
+import ie.ucd.meitheal.shared.id.MemberId;
 
 import java.util.Objects;
 

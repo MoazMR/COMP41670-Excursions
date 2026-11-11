@@ -1,7 +1,7 @@
 package ie.ucd.meitheal.ledger;
 
-import ie.ucd.meitheal.ledger.local.MemberId;
-import ie.ucd.meitheal.ledger.local.TransactionId;
+import ie.ucd.meitheal.shared.id.MemberId;
+import ie.ucd.meitheal.shared.id.TransactionId;
 import org.junit.jupiter.api.Test;
 
 import java.time.LocalDate;
@@ -13,7 +13,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class LedgerManagerGrantWelcomeCharacterizationTest {
-    private static final MemberId ALICE = new MemberId("alice");
+    private static final MemberId ALICE = new MemberId("100001");
     private static final LocalDate GRANT_DATE = LocalDate.of(2026, 11, 8);
 
     @Test
@@ -79,7 +79,7 @@ class LedgerManagerGrantWelcomeCharacterizationTest {
         long balanceBefore = ledger.balanceOf(ALICE);
 
         IllegalStateException exception =
-                assertThrows(IllegalStateException.class, () -> ledger.grantWelcome(ALICE));
+                assertThrows(IllegalStateException.class, () -> ledger.grantWelcome(new MemberId("100001")));
 
         assertEquals("welcome grant already exists for member", exception.getMessage());
         assertEquals(1, transactionIdInvocations.get());

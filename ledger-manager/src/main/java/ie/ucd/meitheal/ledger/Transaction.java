@@ -1,6 +1,6 @@
 package ie.ucd.meitheal.ledger;
 
-import ie.ucd.meitheal.ledger.local.TransactionId;
+import ie.ucd.meitheal.shared.id.TransactionId;
 
 import java.time.LocalDate;
 import java.util.Objects;
