@@ -10,10 +10,12 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -170,6 +172,113 @@ class LedgerManagerTest {
 
         assertFalse(unrestrictedAppend,
                 "LedgerManager must not expose public unrestricted transaction append");
+    }
+
+    @Test
+    void publicationCallbackSeesCandidateAndOldStateThenPublishesItsResult() {
+        Object lock = new Object();
+        LedgerManager ledger = new LedgerManager(lock, () -> new TransactionId("unused"), () -> GRANT_DATE);
+        String result = ledger.withWelcomeGrant(ALICE, new TransactionId("staged"), GRANT_DATE, candidate -> {
+            assertEquals(new TransactionId("staged"), candidate.transactionId());
+            assertTrue(ledger.history().isEmpty());
+            assertEquals(0L, ledger.balanceOf(ALICE));
+            return "published";
+        });
+
+        assertEquals("published", result);
+        assertEquals(120L, ledger.balanceOf(ALICE));
+        assertEquals(1, ledger.history().size());
+    }
+
+    @Test
+    void callbackFailureLeavesStateUnchangedAndSameGrantCanBeRetried() {
+        LedgerManager ledger = new LedgerManager(new Object(), () -> new TransactionId("unused"), () -> GRANT_DATE);
+        TransactionId id = new TransactionId("retryable");
+        assertThrows(IllegalArgumentException.class, () -> ledger.withWelcomeGrant(
+                ALICE, id, GRANT_DATE, candidate -> { throw new IllegalArgumentException("fail"); }));
+        assertTrue(ledger.history().isEmpty());
+
+        ledger.withWelcomeGrant(ALICE, id, GRANT_DATE, candidate -> null);
+
+        assertEquals(1, ledger.history().size());
+        assertEquals(120L, ledger.balanceOf(ALICE));
+        assertThrows(UnsupportedOperationException.class, () -> ledger.history().clear());
+    }
+
+    @Test
+    void duplicateMemberAndTransactionIdRejectBeforeCallback() {
+        LedgerManager ledger = new LedgerManager(new Object(), () -> new TransactionId("unused"), () -> GRANT_DATE);
+        ledger.grantWelcome(ALICE);
+        AtomicReference<Boolean> callbackCalled = new AtomicReference<>(false);
+
+        assertThrows(IllegalStateException.class, () -> ledger.withWelcomeGrant(
+                ALICE, new TransactionId("fresh"), GRANT_DATE, candidate -> {
+                    callbackCalled.set(true);
+                    return null;
+                }));
+        assertThrows(IllegalStateException.class, () -> ledger.withWelcomeGrant(
+                BOB, ledger.history().get(0).transactionId(), GRANT_DATE, candidate -> {
+                    callbackCalled.set(true);
+                    return null;
+                }));
+
+        assertFalse(callbackCalled.get());
+        assertEquals(1, ledger.history().size());
+    }
+
+    @Test
+    void callbackCannotReenterWriteEntryPointsButCanRead() {
+        Object lock = new Object();
+        LedgerManager ledger = new LedgerManager(lock, () -> new TransactionId("supplier-id"), () -> GRANT_DATE);
+        String result = ledger.withWelcomeGrant(
+                ALICE, new TransactionId("candidate"), GRANT_DATE, candidate -> {
+                    assertTrue(Thread.holdsLock(lock));
+                    assertTrue(ledger.history().isEmpty());
+                    assertThrows(IllegalStateException.class, () -> ledger.grantWelcome(BOB));
+                    assertThrows(IllegalStateException.class, () -> ledger.withWelcomeGrant(
+                            BOB, new TransactionId("nested"), GRANT_DATE, nested -> null));
+                    return null;
+                });
+
+        assertNull(result);
+        assertEquals(List.of(ALICE), ledger.history().stream()
+                .map(transaction -> transaction.creditor().memberId())
+                .toList());
+        ledger.grantWelcome(BOB);
+        assertEquals(2, ledger.history().size());
+    }
+
+    @Test
+    void legacySupplierCannotReenterTransactionalGrant() {
+        Object lock = new Object();
+        AtomicReference<LedgerManager> ledgerRef = new AtomicReference<>();
+        LedgerManager ledger = new LedgerManager(lock, () -> {
+            ledgerRef.get().withWelcomeGrant(ALICE, new TransactionId("nested"), GRANT_DATE, candidate -> null);
+            return new TransactionId("outer");
+        }, () -> GRANT_DATE);
+        ledgerRef.set(ledger);
+
+        assertThrows(IllegalStateException.class, () -> ledger.grantWelcome(ALICE));
+        assertTrue(ledger.history().isEmpty());
+    }
+
+    @Test
+    void legacySupplierFailureClearsWriteGuardAndAllowsRetry() {
+        AtomicReference<Boolean> failFirstCall = new AtomicReference<>(true);
+        LedgerManager ledger = new LedgerManager(new Object(), () -> {
+            if (failFirstCall.getAndSet(false)) {
+                throw new IllegalArgumentException("supplier failure");
+            }
+            return new TransactionId("retry");
+        }, () -> GRANT_DATE);
+
+        assertThrows(IllegalArgumentException.class, () -> ledger.grantWelcome(ALICE));
+        assertTrue(ledger.history().isEmpty());
+
+        ledger.grantWelcome(ALICE);
+
+        assertEquals(1, ledger.history().size());
+        assertEquals(120L, ledger.balanceOf(ALICE));
     }
 
     private static LedgerManager ledger(String... ids) {
