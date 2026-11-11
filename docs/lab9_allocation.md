@@ -6,7 +6,7 @@ This file prevents duplicate refactoring work in the shared repository. The subs
 | --- | --- | --- |
 | Moaz Refaei | `member-manager/.../MemberManager.java` - registration preparation and commit workflow | Confirmed on `refactor/moaz-member-registration` |
 | Joe Biju | Integration and foundation: shared contracts, build, `MeithealService`, simulated clock, composition root, and end-to-end verification | Allocated by V3 handover; choose one narrow Lab 9 workflow |
-| Benjamin Long | `LedgerManager`: balances, holds, immutable transactions, fund, settlement, grants, and reports | Allocated by V3 handover; choose one narrow Lab 9 workflow |
+| Benjamin Long | `ledger-manager/.../LedgerManager.java` - `grantWelcome(MemberId)` workflow | Confirmed on `refactor/benjamin-ledger-welcome-grant` |
 | Matthew Gartland | `EngagementManager`: requests, matching, proposals, selection, engagements, confirmations, and cancellation | Allocated by V3 handover; choose one narrow Lab 9 workflow |
 | Abdus Samad Bhadmus | CLI: parsing, command dispatch, active-member workflow, rendering, reachability, and scripted CLI tests | Allocated by V3 handover; choose one narrow Lab 9 workflow |
 
@@ -14,9 +14,13 @@ This file prevents duplicate refactoring work in the shared repository. The subs
 
 No other member should use Moaz's `MemberManager` registration path for Lab 9. Each person should choose a distinct narrow hotspot inside their V3-owned subsystem and record the branch before starting. Moaz will not refactor another owner's module.
 
+Benjamin's Lab 9 work is limited to the ledger welcome-grant path and must not change shared contracts or another manager.
+
 ## Codebase-size note
 
 At allocation time, only the Gradle setup and Moaz's newly implemented `member-manager` production code were present on the branch. The lab brief permits choosing the best available candidate when the codebase is still too small for a mature hotspot. `MemberManager.java` is the strongest available candidate because it has the highest production Java churn count (2) and contains the longest and highest-decision-count workflow in the current codebase.
+
+Benjamin's quantified selection and inspection method are recorded in `lab9/hotspot.md`.
 
 ## Interim parallel-work constraint
 

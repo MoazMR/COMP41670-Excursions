@@ -1,1 +1,4 @@
 // Configuration is inherited from the root project.
+dependencies {
+    api project(':shared')
+}
