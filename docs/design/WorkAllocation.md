@@ -62,3 +62,9 @@ Joe completes integration by:
 4. Adding end-to-end tests for registration, suspension, offers, requests, matching, proposal selection, two-party confirmation, failed settlement, date movement, queries, and reporting.
 5. Verifying duplicate operations do not create extra grants, transfers, fees, or ledger entries.
 6. Confirming documented policies and amendments are implemented consistently before final acceptance.
+
+## Lab 9 hotspot allocation
+
+| Member | File | Method | Allocation |
+| --- | --- | --- | --- |
+| Abdus Samad Bhadmus | `cli/src/main/java/ie/ucd/meitheal/cli/CommandParser.java` | `parse(String)` | confirmed 2026-11-08 |

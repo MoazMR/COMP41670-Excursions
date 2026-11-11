@@ -1,0 +1,65 @@
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.10.2/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+> Task :clean UP-TO-DATE
+> Task :cli:clean
+> Task :engagement-manager:clean
+> Task :ledger-manager:clean
+> Task :member-manager:clean
+> Task :scheduler:clean
+> Task :tests:clean
+> Task :cli:compileJava
+> Task :cli:processResources NO-SOURCE
+> Task :cli:classes
+> Task :cli:jar
+> Task :cli:compileTestJava
+> Task :cli:processTestResources NO-SOURCE
+> Task :cli:testClasses
+> Task :cli:test
+> Task :engagement-manager:compileJava NO-SOURCE
+> Task :engagement-manager:processResources NO-SOURCE
+> Task :engagement-manager:classes UP-TO-DATE
+> Task :engagement-manager:jar
+> Task :engagement-manager:compileTestJava NO-SOURCE
+> Task :engagement-manager:processTestResources NO-SOURCE
+> Task :engagement-manager:testClasses UP-TO-DATE
+> Task :engagement-manager:test NO-SOURCE
+> Task :ledger-manager:compileJava NO-SOURCE
+> Task :ledger-manager:processResources NO-SOURCE
+> Task :ledger-manager:classes UP-TO-DATE
+> Task :ledger-manager:jar
+> Task :ledger-manager:compileTestJava NO-SOURCE
+> Task :ledger-manager:processTestResources NO-SOURCE
+> Task :ledger-manager:testClasses UP-TO-DATE
+> Task :ledger-manager:test NO-SOURCE
+> Task :member-manager:compileJava NO-SOURCE
+> Task :member-manager:processResources NO-SOURCE
+> Task :member-manager:classes UP-TO-DATE
+> Task :member-manager:jar
+> Task :member-manager:compileTestJava NO-SOURCE
+> Task :member-manager:processTestResources NO-SOURCE
+> Task :member-manager:testClasses UP-TO-DATE
+> Task :member-manager:test NO-SOURCE
+> Task :scheduler:compileJava NO-SOURCE
+> Task :scheduler:processResources NO-SOURCE
+> Task :scheduler:classes UP-TO-DATE
+> Task :scheduler:jar
+> Task :scheduler:compileTestJava NO-SOURCE
+> Task :scheduler:processTestResources NO-SOURCE
+> Task :scheduler:testClasses UP-TO-DATE
+> Task :scheduler:test NO-SOURCE
+> Task :tests:compileJava NO-SOURCE
+> Task :tests:processResources NO-SOURCE
+> Task :tests:classes UP-TO-DATE
+> Task :tests:compileTestJava
+> Task :tests:processTestResources NO-SOURCE
+> Task :tests:testClasses
+> Task :tests:test
+
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 9.0.
+
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+
+For more on this, please refer to https://docs.gradle.org/8.10.2/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+
+BUILD SUCCESSFUL in 32s
+17 actionable tasks: 16 executed, 1 up-to-date
