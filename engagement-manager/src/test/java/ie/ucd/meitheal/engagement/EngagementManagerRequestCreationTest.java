@@ -45,6 +45,86 @@ class EngagementManagerRequestCreationTest {
     }
 
     @Test
+    void rawInputOverloadAcceptsInclusiveDurationAndSameDayWindowBoundaries() {
+        MemberId requester = new MemberId(UUID.randomUUID());
+        CategoryId categoryId = new CategoryId("gardening");
+        EngagementManager manager = new EngagementManager(
+            new FakeMemberReadAccess(Map.of(requester, true)),
+            new FakeCategoryReadAccess(Set.of(categoryId))
+        );
+        LocalDate day = LocalDate.of(2026, 2, 1);
+
+        RequestCreationResult minimum = manager.createRequest(
+            new RequestId(UUID.randomUUID()), requester, categoryId, 1, day, day
+        );
+        RequestCreationResult maximum = manager.createRequest(
+            new RequestId(UUID.randomUUID()), requester, categoryId, 480, day, day
+        );
+
+        assertEquals(new RequestDuration(1),
+            assertInstanceOf(RequestCreationResult.Success.class, minimum).request().duration());
+        assertEquals(new RequestDuration(480),
+            assertInstanceOf(RequestCreationResult.Success.class, maximum).request().duration());
+        assertEquals(new RequestWindow(day, day),
+            assertInstanceOf(RequestCreationResult.Success.class, minimum).request().window());
+    }
+
+    @Test
+    void malformedRawInputIsRejectedWithoutChangingStoredRequests() {
+        MemberId requester = new MemberId(UUID.randomUUID());
+        CategoryId categoryId = new CategoryId("gardening");
+        EngagementManager manager = new EngagementManager(
+            new FakeMemberReadAccess(Map.of(requester, true)),
+            new FakeCategoryReadAccess(Set.of(categoryId))
+        );
+        RequestCreationResult existing = manager.createRequest(
+            new RequestId(UUID.randomUUID()), requester, categoryId, 30,
+            LocalDate.of(2026, 2, 1), LocalDate.of(2026, 2, 2)
+        );
+        List<Request> before = manager.getRequests();
+        LocalDate day = LocalDate.of(2026, 2, 1);
+
+        List<RequestCreationResult> rejected = List.of(
+            manager.createRequest(new RequestId(UUID.randomUUID()), requester, categoryId, 0, day, day),
+            manager.createRequest(new RequestId(UUID.randomUUID()), requester, categoryId, 481, day, day),
+            manager.createRequest(new RequestId(UUID.randomUUID()), requester, categoryId, 30, null, day),
+            manager.createRequest(new RequestId(UUID.randomUUID()), requester, categoryId, 30, day, null),
+            manager.createRequest(new RequestId(UUID.randomUUID()), requester, categoryId, 30, day.plusDays(1), day)
+        );
+
+        for (RequestCreationResult result : rejected) {
+            assertEquals(RequestCreationError.MALFORMED_INPUT,
+                assertInstanceOf(RequestCreationResult.Failure.class, result).code());
+        }
+        assertInstanceOf(RequestCreationResult.Success.class, existing);
+        assertEquals(before, manager.getRequests());
+    }
+
+    @Test
+    void duplicateIdWithValidRawInputDoesNotOverwriteStoredRequest() {
+        MemberId requester = new MemberId(UUID.randomUUID());
+        CategoryId categoryId = new CategoryId("gardening");
+        EngagementManager manager = new EngagementManager(
+            new FakeMemberReadAccess(Map.of(requester, true)),
+            new FakeCategoryReadAccess(Set.of(categoryId))
+        );
+        RequestId requestId = new RequestId(UUID.randomUUID());
+        LocalDate firstDay = LocalDate.of(2026, 2, 1);
+        Request original = assertInstanceOf(RequestCreationResult.Success.class,
+            manager.createRequest(requestId, requester, categoryId, 30, firstDay, firstDay)).request();
+        List<Request> before = manager.getRequests();
+
+        RequestCreationResult duplicate = manager.createRequest(
+            requestId, requester, categoryId, 60, firstDay.plusDays(1), firstDay.plusDays(2)
+        );
+
+        assertEquals(RequestCreationError.INVALID_STATE,
+            assertInstanceOf(RequestCreationResult.Failure.class, duplicate).code());
+        assertEquals(before, manager.getRequests());
+        assertEquals(original, manager.findRequestById(requestId).orElseThrow());
+    }
+
+    @Test
     void rejectsUnknownRequester() {
         MemberId unknownRequester = new MemberId(UUID.randomUUID());
         CategoryId categoryId = new CategoryId("gardening");

@@ -4,5 +4,6 @@ public enum RequestCreationError {
     NOT_FOUND,
     SUSPENDED_MEMBER,
     INVALID_CATEGORY,
-    INVALID_STATE
+    INVALID_STATE,
+    MALFORMED_INPUT
 }

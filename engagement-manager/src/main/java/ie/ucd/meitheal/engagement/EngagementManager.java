@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.time.LocalDate;
 
 public final class EngagementManager {
     private final MemberReadAccess memberReadAccess;
@@ -62,6 +63,32 @@ public final class EngagementManager {
         Request request = new Request(requestId, requesterId, categoryId, duration, window, RequestStatus.OPEN);
         requestsById.put(requestId, request);
         return new RequestCreationResult.Success(request);
+    }
+
+    public synchronized RequestCreationResult createRequest(
+        RequestId requestId,
+        MemberId requesterId,
+        CategoryId categoryId,
+        int durationMinutes,
+        LocalDate earliestDate,
+        LocalDate latestDate
+    ) {
+        Objects.requireNonNull(requestId, "requestId must not be null");
+        Objects.requireNonNull(requesterId, "requesterId must not be null");
+        Objects.requireNonNull(categoryId, "categoryId must not be null");
+
+        final RequestDuration duration;
+        final RequestWindow window;
+        try {
+            duration = new RequestDuration(durationMinutes);
+            window = new RequestWindow(earliestDate, latestDate);
+        } catch (IllegalArgumentException | NullPointerException exception) {
+            return new RequestCreationResult.Failure(
+                RequestCreationError.MALFORMED_INPUT,
+                "Duration or request window is invalid"
+            );
+        }
+        return createRequest(requestId, requesterId, categoryId, duration, window);
     }
 
     public synchronized Optional<Request> findRequestById(RequestId requestId) {
