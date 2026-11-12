@@ -12,6 +12,13 @@
 - `suspend` and `reinstate` return updated immutable member snapshots. `isActive` checks a known member; `requireActive` returns the member or rejects a suspended member.
 - `publishCategory` returns `true` for a new publication and `false` for a category already published by that member. Only configured categories are accepted. Member category sets and the configured-category set are immutable.
 
+## Request and proposal integration
+
+- Construct `MemberDirectory` with the same `MemberManager` used by the service for registration. Pass the directory as the shared `MemberManagerPort`. It reads committed membership and exposes immutable profiles with canonical email and shared skill IDs.
+- `isEligible` returns a successful `true` for active members and a successful `false` for suspended members. An absent member returns `MEMBER_NOT_FOUND`. Callers can read skills through `findById` and must check eligibility when exercising new work.
+- `offer` delegates to the real manager, returns the updated profile under the same manager lock, and reports repeated offers as `DUPLICATE`. `reinstate` delegates to the manager's status transition.
+- Construct `FixedCategoryCatalog` from the startup category views. Use its `list()` to initialize the member manager's configured categories and inject the same catalogue into engagement. The catalogue trims configuration fields once and preserves configuration order. Lookup uses exact shared IDs, so a padded nonblank query for an otherwise valid ID is rejected.
+
 ## Errors
 
 `MemberManagerException` supplies a `Code` for rejected operations:

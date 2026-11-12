@@ -226,6 +226,14 @@ public final class MemberManager {
         }
     }
 
+    Optional<Member> publishCategoryAndRead(MemberId memberId, CategoryId categoryId) {
+        synchronized (lock) {
+            return publishCategory(memberId, categoryId)
+                    ? Optional.of(membersById.get(memberId))
+                    : Optional.empty();
+        }
+    }
+
     private void rejectReentrantWrite() {
         if (registrationCallbackActive) {
             throw failure(MemberManagerException.Code.INVALID_REGISTRATION,
