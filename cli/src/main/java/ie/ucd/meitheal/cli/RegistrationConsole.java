@@ -1,14 +1,21 @@
 package ie.ucd.meitheal.cli;
 
 import ie.ucd.meitheal.app.RegistrationService;
+import ie.ucd.meitheal.app.RequestService;
 import ie.ucd.meitheal.shared.id.MemberId;
-import ie.ucd.meitheal.shared.result.Result;
 import ie.ucd.meitheal.shared.result.FailureCode;
+import ie.ucd.meitheal.shared.result.Result;
 import ie.ucd.meitheal.shared.view.BalanceView;
+import ie.ucd.meitheal.shared.view.CategoryView;
 import ie.ucd.meitheal.shared.view.MemberView;
+import ie.ucd.meitheal.shared.view.ProposalView;
+import ie.ucd.meitheal.shared.view.RequestView;
 import java.io.IOException;
 import java.io.Reader;
 import java.io.Writer;
+import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
+import java.util.List;
 import java.util.Objects;
 
 /** Interactive registration and account console. */
@@ -64,10 +71,11 @@ public final class RegistrationConsole {
             case "0" -> running = false;
             case "1" -> registration();
             case "2" -> login();
+            case "3", "4", "5" -> requestAction(choice.trim());
             case "11" -> {
                 if (requireMember("view balance and history")) balanceMenu();
             }
-            case "3", "4", "5", "6", "7", "8", "10" -> unavailable(choice, true);
+            case "6", "7", "8", "10" -> unavailable(choice, true);
             case "9", "12", "13" -> unavailable(choice, false);
             default -> line("Choose one of the listed options.");
         }
@@ -125,6 +133,162 @@ public final class RegistrationConsole {
                 writeFailure(result);
             }
         }
+    }
+
+    private void requestAction(String choice) throws IOException {
+        String action = switch (choice) {
+            case "3" -> "publish a skill offer";
+            case "4" -> "raise a request";
+            case "5" -> "find matches and manage proposals";
+            default -> throw new IllegalArgumentException("Unknown request action: " + choice);
+        };
+        if (!requireMember(action)) return;
+        if (!(service instanceof RequestService requests)) {
+            unavailable(choice, false);
+            return;
+        }
+        clear();
+        switch (choice) {
+            case "3" -> publishSkill(requests);
+            case "4" -> raiseRequest(requests);
+            case "5" -> findMatches(requests);
+        }
+    }
+
+    private CategoryView chooseCategory(RequestService requests) throws IOException {
+        List<CategoryView> categories = requests.categories();
+        if (categories.isEmpty()) {
+            line("No categories are available.");
+            pauseForBack();
+            return null;
+        }
+        for (int index = 0; index < categories.size(); index++) {
+            CategoryView category = categories.get(index);
+            line((index + 1) + " " + category.name() + " (" + category.id().value() + ")");
+        }
+        return choose(categories, "Category number: ");
+    }
+
+    private void publishSkill(RequestService requests) throws IOException {
+        CategoryView category = chooseCategory(requests);
+        if (category == null) return;
+        Result<MemberView> result = requests.offerSkill(selected.id(), category.id());
+        if (result.isFailure()) {
+            failure(result);
+            return;
+        }
+        line("Skill offer published: " + category.name());
+        pauseForBack();
+    }
+
+    private void raiseRequest(RequestService requests) throws IOException {
+        CategoryView category = chooseCategory(requests);
+        while (category != null && running) {
+            line("0 Back");
+            Integer minutes = readNumber("Duration in minutes: ", 480);
+            if (minutes != null && readRequestDates(requests, category, minutes)) return;
+            if (running && minutes == null) {
+                clear();
+                category = chooseCategory(requests);
+            }
+        }
+    }
+
+    private boolean readRequestDates(RequestService requests, CategoryView category, int minutes) throws IOException {
+        while (running) {
+            LocalDate earliest = readDate("Earliest date (YYYY-MM-DD): ");
+            if (earliest == null) return false;
+            LocalDate latest = readDate("Latest date (YYYY-MM-DD): ");
+            if (latest != null) {
+                submitRequest(requests, category, minutes, earliest, latest);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private void submitRequest(RequestService requests, CategoryView category, int minutes,
+            LocalDate earliest, LocalDate latest) throws IOException {
+        Result<RequestView> result = requests.createRequest(selected.id(), category.id(), minutes, earliest, latest);
+        if (result.isFailure()) {
+            failure(result);
+            return;
+        }
+        line("Request raised. Request ID: " + result.value().orElseThrow().id().value());
+        pauseForBack();
+    }
+
+    private void findMatches(RequestService requests) throws IOException {
+        while (running) {
+            Result<List<RequestView>> result = requests.matchingRequests(selected.id());
+            if (result.isFailure()) {
+                failure(result);
+                return;
+            }
+            List<RequestView> matches = result.value().orElseThrow();
+            if (matches.isEmpty()) {
+                line("No matching requests.");
+                pauseForBack();
+                return;
+            }
+            line("Matching requests");
+            for (int index = 0; index < matches.size(); index++) {
+                RequestView request = matches.get(index);
+                line((index + 1) + " Request " + request.id().value() + " | " + request.categoryId().value()
+                        + " | " + request.durationMinutes() + " minutes | " + request.windowStart()
+                        + " to " + request.windowEnd());
+            }
+            RequestView match = choose(matches, "Request number to propose for: ");
+            if (match == null) return;
+            clear();
+            line("Request " + match.id().value() + " | " + match.windowStart() + " to " + match.windowEnd());
+            line("0 Back");
+            LocalDate date = readDate("Proposed date (YYYY-MM-DD): ");
+            if (date != null) {
+                Result<ProposalView> proposal = requests.submitProposal(selected.id(), match.id(), date);
+                if (proposal.isFailure()) {
+                    failure(proposal);
+                } else {
+                    line("Proposal submitted. Proposal ID: " + proposal.value().orElseThrow().id().value());
+                    pauseForBack();
+                }
+            }
+            clear();
+        }
+    }
+
+    private <T> T choose(List<T> choices, String prompt) throws IOException {
+        line("0 Back");
+        Integer number = readNumber(prompt, choices.size());
+        return number == null ? null : choices.get(number - 1);
+    }
+
+    private Integer readNumber(String prompt, int maximum) throws IOException {
+        while (running) {
+            String value = readLine(prompt);
+            if (value == null || value.trim().equals("0")) return null;
+            try {
+                int number = Integer.parseInt(value.trim());
+                if (number >= 1 && number <= maximum) return number;
+            } catch (NumberFormatException ignored) {
+                // Print the valid range and ask for the same value again.
+            }
+            line("Enter a whole number from 1 to " + maximum + ", or 0 Back.");
+        }
+        return null;
+    }
+
+    private LocalDate readDate(String prompt) throws IOException {
+        while (running) {
+            String value = readLine(prompt);
+            if (value == null || value.trim().equals("0")) return null;
+            try {
+                return LocalDate.parse(value.trim());
+            } catch (DateTimeParseException ignored) {
+                line("Enter a date in YYYY-MM-DD format, or 0 Back.");
+            }
+        }
+        return null;
     }
 
     private void balanceMenu() throws IOException {
