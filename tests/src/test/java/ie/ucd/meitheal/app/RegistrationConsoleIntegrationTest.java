@@ -31,7 +31,8 @@ class RegistrationConsoleIntegrationTest {
         Supplier<TransactionId> transactionIds = () -> new TransactionId("registration-" + sequence.incrementAndGet());
         var ledger = new LedgerManager(monitor, transactionIds, clock::currentDate);
         var failOnce = new AtomicBoolean(true);
-        var service = new InMemoryRegistrationService(monitor, members, ledger, clock, transactionIds, () -> {
+        var service = new InMemoryRegistrationService(monitor, members, ledger, clock, transactionIds,
+                new ie.ucd.meitheal.membermanager.FixedCategoryCatalog(java.util.List.of()), () -> {
             assertTrue(Thread.holdsLock(monitor));
             assertTrue(members.findById(FIRST).isEmpty());
             assertTrue(ledger.history().isEmpty());

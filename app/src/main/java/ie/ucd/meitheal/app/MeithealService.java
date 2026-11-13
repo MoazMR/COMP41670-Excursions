@@ -25,7 +25,7 @@ import java.util.List;
  * Cross-owner operations preserve all affected observable state on rejection or an uncommitted
  * technical failure; the latter is reported as ATOMIC_OPERATION_FAILED and may be retried.
  */
-public interface MeithealService extends RegistrationService {
+public interface MeithealService extends RequestService {
 
     /**
      * Unknown members fail with MEMBER_NOT_FOUND; repeating the current status is rejected.
@@ -43,29 +43,7 @@ public interface MeithealService extends RegistrationService {
 
     Result<CategoryView> findCategory(CategoryId categoryId);
 
-    /** Returns an immutable catalogue snapshot. */
-    List<CategoryView> categories();
-
-    /**
-     * A suspended member fails with SUSPENDED_MEMBER when publishing a skill offer.
-     */
-    Result<MemberView> offerSkill(MemberId memberId, CategoryId categoryId);
-
-    /**
-     * A suspended member fails with SUSPENDED_MEMBER when creating a request.
-     */
-    Result<RequestView> createRequest(MemberId requesterId, CategoryId categoryId,
-            int durationMinutes, LocalDate windowStart, LocalDate windowEnd);
-
     Result<RequestView> findRequest(RequestId requestId);
-
-    /** Read-only matching query; result list is an immutable candidate snapshot. */
-    Result<List<RequestView>> matchingRequests(MemberId helperId);
-
-    /**
-     * A suspended member fails with SUSPENDED_MEMBER when submitting a proposal.
-     */
-    Result<ProposalView> submitProposal(MemberId helperId, RequestId requestId, LocalDate proposedDate);
 
     Result<List<ProposalView>> proposalsForRequest(MemberId requesterId, RequestId requestId);
 

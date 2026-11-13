@@ -1,6 +1,14 @@
 package ie.ucd.meitheal.app;
 
+import ie.ucd.meitheal.engagement.EngagementManager;
 import ie.ucd.meitheal.ledger.LedgerManager;
+import ie.ucd.meitheal.membermanager.MemberDirectory;
+import ie.ucd.meitheal.shared.id.ProposalId;
+import ie.ucd.meitheal.shared.id.RequestId;
+import ie.ucd.meitheal.shared.port.CategoryCatalog;
+import ie.ucd.meitheal.shared.view.CategoryView;
+import ie.ucd.meitheal.shared.view.RequestView;
+import ie.ucd.meitheal.shared.view.ProposalView;
 import ie.ucd.meitheal.membermanager.Member;
 import ie.ucd.meitheal.membermanager.MemberManager;
 import ie.ucd.meitheal.membermanager.MemberManagerException;
@@ -22,27 +30,41 @@ import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 /** In-memory implementation of registration backed by the membership and ledger owners. */
-public final class InMemoryRegistrationService implements RegistrationService {
+public final class InMemoryRegistrationService implements RequestService {
     private final Object lock;
     private final MemberManager members;
     private final LedgerManager ledger;
     private final RegistrationCoordinator coordinator;
 
+    private final CategoryCatalog catalogue;
+    private final MemberDirectory directory;
+    private final EngagementManager engagements;
+    private long nextRequest = 1;
+    private long nextProposal = 1;
+
     public static InMemoryRegistrationService create() {
         Object lock = new Object();
         var ids = new AtomicLong(1);
         Supplier<TransactionId> generator = () -> new TransactionId("tx-" + ids.getAndIncrement());
-        MemberManager members = new MemberManager(lock, List.of());
+        CategoryCatalog catalogue = StartupCatalogue.load(
+                InMemoryRegistrationService.class.getResourceAsStream("/categories.csv"));
+        var categoryIds = catalogue.list().stream()
+                .map(row -> new ie.ucd.meitheal.membermanager.CategoryId(row.id().value())).toList();
+        MemberManager members = new MemberManager(lock, categoryIds);
         SimulatedClock clock = new InMemorySimulatedClock(LocalDate.of(2026, 9, 1));
         LedgerManager ledger = new LedgerManager(lock, generator, clock::currentDate);
-        return new InMemoryRegistrationService(lock, members, ledger, clock, generator, () -> { });
+        return new InMemoryRegistrationService(lock, members, ledger, clock, generator, catalogue, () -> { });
     }
 
     InMemoryRegistrationService(Object lock, MemberManager members, LedgerManager ledger,
-            SimulatedClock clock, Supplier<TransactionId> transactionIds, Runnable beforePublication) {
+            SimulatedClock clock, Supplier<TransactionId> transactionIds, CategoryCatalog catalogue,
+            Runnable beforePublication) {
         this.lock = Objects.requireNonNull(lock, "lock");
         this.members = Objects.requireNonNull(members, "members");
         this.ledger = Objects.requireNonNull(ledger, "ledger");
+        this.catalogue = Objects.requireNonNull(catalogue);
+        this.directory = new MemberDirectory(members);
+        this.engagements = new EngagementManager(directory, catalogue, clock);
         Objects.requireNonNull(beforePublication, "beforePublication");
         RegistrationCoordinator.MembershipRegistration membership = (id, name, email, callback) -> {
             try {
@@ -112,6 +134,50 @@ public final class InMemoryRegistrationService implements RegistrationService {
             }
             long value = ledger.balanceOf(memberId);
             return Result.success(new BalanceView(memberId, value, 0, value));
+        }
+    }
+
+    @Override
+    public List<CategoryView> categories() {
+        return catalogue.list();
+    }
+
+    @Override
+    public Result<MemberView> offerSkill(MemberId memberId, CategoryId categoryId) {
+        synchronized (lock) {
+            var offer = directory.offer(memberId, categoryId);
+            if (offer.isFailure()) {
+                return Result.failure(offer.failureCode().orElseThrow(), offer.detail().orElse(""));
+            }
+            return findMember(memberId);
+        }
+    }
+
+    @Override
+    public Result<RequestView> createRequest(MemberId requesterId, CategoryId categoryId,
+            int durationMinutes, LocalDate windowStart, LocalDate windowEnd) {
+        synchronized (lock) {
+            var result = engagements.createRequest(requesterId, new RequestId("req-" + nextRequest),
+                    categoryId, durationMinutes, windowStart, windowEnd);
+            if (result.isSuccess()) nextRequest++;
+            return result;
+        }
+    }
+
+    @Override
+    public Result<List<RequestView>> matchingRequests(MemberId helperId) {
+        synchronized (lock) {
+            return engagements.matchingRequests(helperId);
+        }
+    }
+
+    @Override
+    public Result<ProposalView> submitProposal(MemberId helperId, RequestId requestId, LocalDate proposedDate) {
+        synchronized (lock) {
+            var result = engagements.submitProposal(helperId, requestId, new ProposalId("prop-" + nextProposal),
+                    proposedDate);
+            if (result.isSuccess()) nextProposal++;
+            return result;
         }
     }
 
