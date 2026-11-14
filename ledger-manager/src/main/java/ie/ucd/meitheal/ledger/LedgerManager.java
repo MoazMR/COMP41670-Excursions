@@ -29,6 +29,7 @@ public final class LedgerManager {
     private List<Transaction> transactions = new ArrayList<>();
     private Set<TransactionId> transactionIds = new HashSet<>();
     private Map<EngagementId, Hold> holds = new HashMap<>();
+    private Set<EngagementId> consumedEngagementIds = new HashSet<>();
     private boolean publicationCallbackActive;
 
     public LedgerManager(
@@ -167,6 +168,9 @@ public final class LedgerManager {
             if (holds.containsKey(engagementId)) {
                 return Result.failure(FailureCode.DUPLICATE, "hold already exists for engagement");
             }
+            if (consumedEngagementIds.contains(engagementId)) {
+                return Result.failure(FailureCode.DUPLICATE, "engagement has already been settled");
+            }
 
             long amount = durationMinutes + durationMinutes * 5L / 100L;
             BalanceView current = balanceView(requesterId);
@@ -191,6 +195,73 @@ public final class LedgerManager {
                 publicationCallbackActive = false;
             }
         }
+    }
+
+    /** Settles a previously accepted hold and publishes the prepared entries after callback success. */
+    public <T> Result<T> withSettlement(
+            EngagementId engagementId,
+            LocalDate date,
+            Supplier<TransactionId> freshId,
+            Supplier<Result<T>> beforePublish) {
+        synchronized (lock) {
+            ensureWritesAllowed();
+            Objects.requireNonNull(freshId, "freshId");
+            Objects.requireNonNull(beforePublish, "beforePublish");
+            Hold hold = holds.get(engagementId);
+            if (hold == null) {
+                return Result.failure(FailureCode.INVALID_STATE, "no active hold for engagement");
+            }
+            Objects.requireNonNull(date, "date");
+
+            long communityShare = hold.amount() - hold.durationMinutes();
+            List<Transaction> preparedEntries = new ArrayList<>();
+            Set<TransactionId> nextTransactionIds = new HashSet<>(transactionIds);
+            AccountReference requester = AccountReference.member(hold.requesterId());
+            AccountReference helper = AccountReference.member(hold.helperId());
+            Set<EngagementId> nextConsumedEngagementIds = new HashSet<>(consumedEngagementIds);
+            nextConsumedEngagementIds.add(engagementId);
+            publicationCallbackActive = true;
+            try {
+                addSettlementEntry(preparedEntries, nextTransactionIds, freshId, date, engagementId, requester,
+                        helper, hold.durationMinutes(), TransactionType.SERVICE_PAYMENT);
+                if (communityShare > 0) {
+                    addSettlementEntry(preparedEntries, nextTransactionIds, freshId, date, engagementId, requester,
+                            AccountReference.FUND, communityShare, TransactionType.LEVY);
+                }
+
+                List<Transaction> nextTransactions = new ArrayList<>(transactions);
+                nextTransactions.addAll(preparedEntries);
+                Map<EngagementId, Hold> nextHolds = new HashMap<>(holds);
+                nextHolds.remove(engagementId);
+                Result<T> result = Objects.requireNonNull(beforePublish.get(), "publication result");
+                if (result.isSuccess()) {
+                    transactions = nextTransactions;
+                    transactionIds = nextTransactionIds;
+                    holds = nextHolds;
+                    consumedEngagementIds = nextConsumedEngagementIds;
+                }
+                return result;
+            } finally {
+                publicationCallbackActive = false;
+            }
+        }
+    }
+
+    private void addSettlementEntry(
+            List<Transaction> entries,
+            Set<TransactionId> ids,
+            Supplier<TransactionId> freshId,
+            LocalDate date,
+            EngagementId engagementId,
+            AccountReference debtor,
+            AccountReference creditor,
+            long amount,
+            TransactionType type) {
+        TransactionId id = Objects.requireNonNull(freshId.get(), "generated transaction ID");
+        if (!ids.add(id)) {
+            throw new IllegalStateException("duplicate transaction ID: " + id);
+        }
+        entries.add(new Transaction(id, debtor, creditor, amount, type, date, engagementId));
     }
 
     private record Hold(MemberId requesterId, MemberId helperId, int durationMinutes, long amount) { }
