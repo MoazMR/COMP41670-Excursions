@@ -25,7 +25,7 @@ import java.util.List;
  * Cross-owner operations preserve all affected observable state on rejection or an uncommitted
  * technical failure; the latter is reported as ATOMIC_OPERATION_FAILED and may be retried.
  */
-public interface MeithealService extends RequestService {
+public interface MeithealService extends SelectionService {
 
     /**
      * Unknown members fail with MEMBER_NOT_FOUND; repeating the current status is rejected.

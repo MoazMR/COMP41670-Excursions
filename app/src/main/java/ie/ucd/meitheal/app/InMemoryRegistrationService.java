@@ -22,15 +22,17 @@ import ie.ucd.meitheal.shared.result.FailureCode;
 import ie.ucd.meitheal.shared.result.Result;
 import ie.ucd.meitheal.shared.view.BalanceView;
 import ie.ucd.meitheal.shared.view.MemberView;
+import ie.ucd.meitheal.shared.view.EngagementView;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 /** In-memory implementation of registration backed by the membership and ledger owners. */
-public final class InMemoryRegistrationService implements RequestService {
+public final class InMemoryRegistrationService implements SelectionService {
     private final Object lock;
     private final MemberManager members;
     private final LedgerManager ledger;
@@ -39,6 +41,7 @@ public final class InMemoryRegistrationService implements RequestService {
     private final CategoryCatalog catalogue;
     private final MemberDirectory directory;
     private final EngagementManager engagements;
+    private final SelectionCoordinator selectionCoordinator;
     private long nextRequest = 1;
     private long nextProposal = 1;
 
@@ -53,18 +56,26 @@ public final class InMemoryRegistrationService implements RequestService {
         MemberManager members = new MemberManager(lock, categoryIds);
         SimulatedClock clock = new InMemorySimulatedClock(LocalDate.of(2026, 9, 1));
         LedgerManager ledger = new LedgerManager(lock, generator, clock::currentDate);
-        return new InMemoryRegistrationService(lock, members, ledger, clock, generator, catalogue, () -> { });
+        return new InMemoryRegistrationService(lock, members, ledger, clock, generator, catalogue,
+                () -> { }, ignored -> { });
     }
 
     InMemoryRegistrationService(Object lock, MemberManager members, LedgerManager ledger,
             SimulatedClock clock, Supplier<TransactionId> transactionIds, CategoryCatalog catalogue,
             Runnable beforePublication) {
+        this(lock, members, ledger, clock, transactionIds, catalogue, beforePublication, ignored -> { });
+    }
+
+    InMemoryRegistrationService(Object lock, MemberManager members, LedgerManager ledger,
+            SimulatedClock clock, Supplier<TransactionId> transactionIds, CategoryCatalog catalogue,
+            Runnable beforePublication, Consumer<EngagementView> beforeSelectionPublication) {
         this.lock = Objects.requireNonNull(lock, "lock");
         this.members = Objects.requireNonNull(members, "members");
         this.ledger = Objects.requireNonNull(ledger, "ledger");
         this.catalogue = Objects.requireNonNull(catalogue);
         this.directory = new MemberDirectory(members);
-        this.engagements = new EngagementManager(directory, catalogue, clock);
+        this.engagements = new EngagementManager(directory, catalogue, clock, lock);
+        this.selectionCoordinator = new SelectionCoordinator(lock, engagements, ledger, beforeSelectionPublication);
         Objects.requireNonNull(beforePublication, "beforePublication");
         RegistrationCoordinator.MembershipRegistration membership = (id, name, email, callback) -> {
             try {
@@ -132,8 +143,7 @@ public final class InMemoryRegistrationService implements RequestService {
             if (memberId == null || members.findById(memberId).isEmpty()) {
                 return Result.failure(FailureCode.MEMBER_NOT_FOUND, "Member does not exist");
             }
-            long value = ledger.balanceOf(memberId);
-            return Result.success(new BalanceView(memberId, value, 0, value));
+            return Result.success(ledger.balanceView(memberId));
         }
     }
 
@@ -180,6 +190,24 @@ public final class InMemoryRegistrationService implements RequestService {
             return result;
         }
     }
+
+    @Override
+    public Result<List<ProposalView>> proposalsForRequest(MemberId requesterId, RequestId requestId) {
+        synchronized (lock) {
+            return engagements.proposalsForRequest(requesterId, requestId);
+        }
+    }
+
+    @Override
+    public Result<EngagementView> selectProposal(MemberId requesterId, ProposalId proposalId) {
+        return selectionCoordinator.select(requesterId, proposalId);
+    }
+
+    EngagementManager engagementManagerForTests() { return engagements; }
+
+    LedgerManager ledgerManagerForTests() { return ledger; }
+
+    MemberManager memberManagerForTests() { return members; }
 
     private static MemberView toView(Member member, long ledgerCredits) {
         var skills = member.offeredCategories().stream()
