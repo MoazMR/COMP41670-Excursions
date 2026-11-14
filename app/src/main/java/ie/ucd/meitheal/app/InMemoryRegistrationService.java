@@ -33,7 +33,7 @@ import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 /** In-memory implementation of registration backed by the membership and ledger owners. */
-public final class InMemoryRegistrationService implements ConfirmationService {
+public final class InMemoryRegistrationService implements CancellationService {
     private final Object lock;
     private final MemberManager members;
     private final LedgerManager ledger;
@@ -44,6 +44,7 @@ public final class InMemoryRegistrationService implements ConfirmationService {
     private final EngagementManager engagements;
     private final SelectionCoordinator selectionCoordinator;
     private final ConfirmationCoordinator confirmationCoordinator;
+    private final CancellationCoordinator cancellationCoordinator;
     private long nextRequest = 1;
     private long nextProposal = 1;
 
@@ -79,6 +80,15 @@ public final class InMemoryRegistrationService implements ConfirmationService {
             SimulatedClock clock, Supplier<TransactionId> transactionIds, CategoryCatalog catalogue,
             Runnable beforePublication, Consumer<EngagementView> beforeSelectionPublication,
             Consumer<EngagementView> beforeConfirmationPublication) {
+        this(lock, members, ledger, clock, transactionIds, catalogue, beforePublication,
+                beforeSelectionPublication, beforeConfirmationPublication, ignored -> { });
+    }
+
+    InMemoryRegistrationService(Object lock, MemberManager members, LedgerManager ledger,
+            SimulatedClock clock, Supplier<TransactionId> transactionIds, CategoryCatalog catalogue,
+            Runnable beforePublication, Consumer<EngagementView> beforeSelectionPublication,
+            Consumer<EngagementView> beforeConfirmationPublication,
+            Consumer<EngagementView> beforeCancellationPublication) {
         this.lock = Objects.requireNonNull(lock, "lock");
         this.members = Objects.requireNonNull(members, "members");
         this.ledger = Objects.requireNonNull(ledger, "ledger");
@@ -89,6 +99,8 @@ public final class InMemoryRegistrationService implements ConfirmationService {
         this.confirmationCoordinator = new ConfirmationCoordinator(lock, clock,
                 Objects.requireNonNull(transactionIds, "transactionIds"), engagements::withConfirmation,
                 ledger::withSettlement, beforeConfirmationPublication);
+        this.cancellationCoordinator = new CancellationCoordinator(lock, clock,
+                engagements::withCancellation, ledger::withRelease, beforeCancellationPublication);
         Objects.requireNonNull(beforePublication, "beforePublication");
         RegistrationCoordinator.MembershipRegistration membership = (id, name, email, callback) -> {
             try {
@@ -219,6 +231,11 @@ public final class InMemoryRegistrationService implements ConfirmationService {
     @Override
     public Result<EngagementView> confirmEngagement(MemberId participantId, EngagementId engagementId) {
         return confirmationCoordinator.confirm(participantId, engagementId);
+    }
+
+    @Override
+    public Result<EngagementView> cancelEngagement(MemberId participantId, EngagementId engagementId) {
+        return cancellationCoordinator.cancel(participantId, engagementId);
     }
 
     EngagementManager engagementManagerForTests() { return engagements; }
