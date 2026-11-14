@@ -41,7 +41,7 @@ public final class EngagementManager {
     private Map<RequestId, RequestView> requestsById = new LinkedHashMap<>();
     private Map<ProposalId, ProposalView> proposalsById = new LinkedHashMap<>();
     private Map<EngagementId, EngagementView> engagementsById = new LinkedHashMap<>();
-    private boolean selectionCallbackActive;
+    private boolean ownerCallbackActive;
 
     public EngagementManager(MemberManagerPort members, CategoryCatalog categories, SimulatedClock clock) {
         this(members, categories, clock, new Object());
@@ -88,7 +88,7 @@ public final class EngagementManager {
             LocalDate windowStart,
             LocalDate windowEnd) {
         synchronized (commonLock) {
-            if (selectionCallbackActive) {
+            if (ownerCallbackActive) {
                 return callbackMutationFailure();
             }
             if (requesterId == null || requestId == null || categoryId == null) {
@@ -172,7 +172,7 @@ public final class EngagementManager {
             ProposalId proposalId,
             LocalDate proposedOn) {
         synchronized (commonLock) {
-            if (selectionCallbackActive) {
+            if (ownerCallbackActive) {
                 return callbackMutationFailure();
             }
             if (helperId == null || requestId == null || proposalId == null || proposedOn == null) {
@@ -253,7 +253,7 @@ public final class EngagementManager {
             if (requesterId == null || proposalId == null || engagementId == null || beforePublish == null) {
                 return Result.failure(FailureCode.MALFORMED_INPUT, "Selection fields are required");
             }
-            if (selectionCallbackActive) {
+            if (ownerCallbackActive) {
                 return Result.failure(FailureCode.INVALID_STATE, "Selection callback is active");
             }
             ProposalView proposal = proposalsById.get(proposalId);
@@ -305,14 +305,14 @@ public final class EngagementManager {
             Map<EngagementId, EngagementView> candidateEngagements = new LinkedHashMap<>(engagementsById);
             candidateEngagements.put(engagementId, engagement);
             Result<T> callbackResult;
-            selectionCallbackActive = true;
+            ownerCallbackActive = true;
             try {
                 callbackResult = beforePublish.apply(engagement);
                 if (callbackResult == null) {
                     throw new NullPointerException("Selection callback returned null");
                 }
             } finally {
-                selectionCallbackActive = false;
+                ownerCallbackActive = false;
             }
             if (callbackResult.isFailure()) {
                 return callbackResult;
@@ -367,6 +367,69 @@ public final class EngagementManager {
         }
     }
 
+    public Result<EngagementView> withConfirmation(MemberId participantId, EngagementId engagementId,
+            LocalDate today, Function<EngagementView, Result<EngagementView>> settleBeforePublish) {
+        synchronized (commonLock) {
+            if (ownerCallbackActive) {
+                return callbackMutationFailure();
+            }
+            if (participantId == null || engagementId == null || today == null || settleBeforePublish == null) {
+                return Result.failure(FailureCode.MALFORMED_INPUT, "Confirmation fields are required");
+            }
+            EngagementView engagement = engagementsById.get(engagementId);
+            if (engagement == null) {
+                return Result.failure(FailureCode.ENGAGEMENT_NOT_FOUND, "Engagement not found");
+            }
+            if (!participantId.equals(engagement.requesterId()) && !participantId.equals(engagement.helperId())) {
+                return Result.failure(FailureCode.NOT_PARTICIPANT, "Member is not an engagement participant");
+            }
+            if (engagement.status() != EngagementStatus.AGREED) {
+                return Result.failure(FailureCode.INVALID_STATE, "Engagement is not awaiting confirmation");
+            }
+            if (today.isBefore(engagement.scheduledDate())) {
+                return Result.failure(FailureCode.BUSINESS_REJECTION, "Engagement cannot be confirmed before its scheduled date");
+            }
+            if (engagement.confirmationActors().contains(participantId)) {
+                return Result.failure(FailureCode.DUPLICATE, "Participant has already confirmed");
+            }
+
+            Set<MemberId> actors = new java.util.LinkedHashSet<>(engagement.confirmationActors());
+            actors.add(participantId);
+            if (actors.size() == 1) {
+                EngagementView candidate = new EngagementView(engagement.id(), engagement.proposalId(),
+                    engagement.requestId(), engagement.requesterId(), engagement.helperId(),
+                    engagement.durationMinutes(), engagement.scheduledDate(), EngagementStatus.AGREED,
+                    actors, null, null, false);
+                Result<EngagementView> preparedResult = Result.success(candidate);
+                engagementsById.put(engagementId, candidate);
+                return preparedResult;
+            }
+
+            EngagementView candidate = new EngagementView(engagement.id(), engagement.proposalId(),
+                engagement.requestId(), engagement.requesterId(), engagement.helperId(),
+                engagement.durationMinutes(), engagement.scheduledDate(), EngagementStatus.COMPLETED,
+                actors, null, null, false);
+            Map<EngagementId, EngagementView> candidateEngagements = new LinkedHashMap<>(engagementsById);
+            candidateEngagements.put(engagementId, candidate);
+            Result<EngagementView> preparedResult = Result.success(candidate);
+            Result<EngagementView> callbackResult;
+            ownerCallbackActive = true;
+            try {
+                callbackResult = settleBeforePublish.apply(candidate);
+                if (callbackResult == null) {
+                    throw new NullPointerException("Confirmation callback returned null");
+                }
+            } finally {
+                ownerCallbackActive = false;
+            }
+            if (callbackResult.isFailure()) {
+                return callbackResult;
+            }
+            engagementsById = candidateEngagements;
+            return preparedResult;
+        }
+    }
+
     public Result<List<EngagementView>> engagementsForMember(MemberId memberId) {
         synchronized (commonLock) {
             if (memberId == null) {
@@ -383,7 +446,7 @@ public final class EngagementManager {
     }
 
     private static <T> Result<T> callbackMutationFailure() {
-        return Result.failure(FailureCode.INVALID_STATE, "Owner mutation is not allowed during selection callback");
+        return Result.failure(FailureCode.INVALID_STATE, "Owner mutation is not allowed during an owner callback");
     }
 
     private boolean offersCategory(MemberEligibility helper, CategoryId categoryId) {
@@ -408,9 +471,9 @@ public final class EngagementManager {
         RequestWindow window
     ) {
         synchronized (commonLock) {
-            if (selectionCallbackActive) {
+            if (ownerCallbackActive) {
                 return new RequestCreationResult.Failure(RequestCreationError.INVALID_STATE,
-                    "Owner mutation is not allowed during selection callback");
+                    "Owner mutation is not allowed during an owner callback");
             }
             Objects.requireNonNull(duration, "duration must not be null");
             Objects.requireNonNull(window, "window must not be null");
@@ -428,9 +491,9 @@ public final class EngagementManager {
         LocalDate latestDate
     ) {
         synchronized (commonLock) {
-            if (selectionCallbackActive) {
+            if (ownerCallbackActive) {
                 return new RequestCreationResult.Failure(RequestCreationError.INVALID_STATE,
-                    "Owner mutation is not allowed during selection callback");
+                    "Owner mutation is not allowed during an owner callback");
             }
             Objects.requireNonNull(requestId, "requestId must not be null");
             Objects.requireNonNull(requesterId, "requesterId must not be null");
