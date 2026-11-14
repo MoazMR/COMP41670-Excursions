@@ -169,7 +169,7 @@ public final class LedgerManager {
                 return Result.failure(FailureCode.DUPLICATE, "hold already exists for engagement");
             }
             if (consumedEngagementIds.contains(engagementId)) {
-                return Result.failure(FailureCode.DUPLICATE, "engagement has already been settled");
+                return Result.failure(FailureCode.DUPLICATE, "engagement has already been consumed");
             }
 
             long amount = durationMinutes + durationMinutes * 5L / 100L;
@@ -262,6 +262,34 @@ public final class LedgerManager {
             throw new IllegalStateException("duplicate transaction ID: " + id);
         }
         entries.add(new Transaction(id, debtor, creditor, amount, type, date, engagementId));
+    }
+
+    /** Releases a previously accepted hold and marks its engagement ID as consumed after callback success. */
+    public <T> Result<T> withRelease(EngagementId engagementId, Supplier<Result<T>> beforePublish) {
+        synchronized (lock) {
+            ensureWritesAllowed();
+            Objects.requireNonNull(beforePublish, "beforePublish");
+            if (engagementId == null || !holds.containsKey(engagementId)) {
+                return Result.failure(FailureCode.INVALID_STATE, "no active hold for engagement");
+            }
+
+            Map<EngagementId, Hold> nextHolds = new HashMap<>(holds);
+            nextHolds.remove(engagementId);
+            Set<EngagementId> nextConsumedEngagementIds = new HashSet<>(consumedEngagementIds);
+            nextConsumedEngagementIds.add(engagementId);
+
+            publicationCallbackActive = true;
+            try {
+                Result<T> result = Objects.requireNonNull(beforePublish.get(), "publication result");
+                if (result.isSuccess()) {
+                    holds = nextHolds;
+                    consumedEngagementIds = nextConsumedEngagementIds;
+                }
+                return result;
+            } finally {
+                publicationCallbackActive = false;
+            }
+        }
     }
 
     private record Hold(MemberId requesterId, MemberId helperId, int durationMinutes, long amount) { }

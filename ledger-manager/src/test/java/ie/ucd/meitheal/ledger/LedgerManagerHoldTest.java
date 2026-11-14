@@ -283,6 +283,168 @@ class LedgerManagerHoldTest {
         assertEquals(1, ids.get());
     }
 
+    @Test
+    void releaseConsumesOnlyItsHoldWithoutChangingLedgerEntries() {
+        AtomicInteger registrationIds = new AtomicInteger();
+        AtomicInteger generatedDates = new AtomicInteger();
+        LedgerManager releaseLedger = new LedgerManager(lock,
+                () -> new TransactionId("release-" + registrationIds.incrementAndGet()), () -> {
+                    generatedDates.incrementAndGet();
+                    return DATE;
+                });
+        releaseLedger.grantWelcome(ALICE);
+        EngagementId first = new EngagementId("release-first");
+        EngagementId second = new EngagementId("release-second");
+        releaseLedger.withHold(first, ALICE, BOB, 100, Result::success);
+        releaseLedger.withHold(second, ALICE, CAROL, 186, Result::success);
+        List<Transaction> history = releaseLedger.history();
+        assertEquals(new BalanceView(ALICE, 120, 300, -180), releaseLedger.balanceView(ALICE));
+
+        Result<String> released = Result.success("released");
+        AtomicInteger firstReleaseCallbacks = new AtomicInteger();
+        assertSame(released, releaseLedger.withRelease(first, () -> {
+            firstReleaseCallbacks.incrementAndGet();
+            assertEquals(history, releaseLedger.history());
+            assertEquals(new BalanceView(ALICE, 120, 300, -180), releaseLedger.balanceView(ALICE));
+            assertEquals(0, releaseLedger.balanceOf(BOB));
+            assertEquals(0, releaseLedger.balanceOf(CAROL));
+            assertEquals(-120, releaseLedger.balance(AccountReference.SYSTEM));
+            assertEquals(0, releaseLedger.balance(AccountReference.FUND));
+            return released;
+        }));
+        assertEquals(1, firstReleaseCallbacks.get());
+        assertEquals(1, registrationIds.get());
+        assertEquals(1, generatedDates.get());
+
+        assertEquals(history, releaseLedger.history());
+        assertEquals(new BalanceView(ALICE, 120, 195, -75), releaseLedger.balanceView(ALICE));
+        assertEquals(new BalanceView(BOB, 0, 0, 0), releaseLedger.balanceView(BOB));
+        assertEquals(new BalanceView(CAROL, 0, 0, 0), releaseLedger.balanceView(CAROL));
+        assertEquals(-120, releaseLedger.balance(AccountReference.SYSTEM));
+        assertEquals(0, releaseLedger.balance(AccountReference.FUND));
+        assertEquals(FailureCode.DUPLICATE, releaseLedger.withHold(first, ALICE, BOB, 1,
+                ignored -> fail("released engagement reached publication")).failureCode().orElseThrow());
+        assertEquals(FailureCode.INVALID_STATE, releaseLedger.withSettlement(first, DATE,
+                () -> fail("released engagement requested transaction ID"),
+                () -> fail("released engagement reached settlement callback")).failureCode().orElseThrow());
+        AtomicInteger repeatedReleaseCallbacks = new AtomicInteger();
+        assertEquals(FailureCode.INVALID_STATE, releaseLedger.withRelease(first, () -> {
+            repeatedReleaseCallbacks.incrementAndGet();
+            return Result.success("unexpected");
+        }).failureCode().orElseThrow());
+        assertEquals(0, repeatedReleaseCallbacks.get());
+
+        assertTrue(releaseLedger.withRelease(second, () -> Result.success("released")).isSuccess());
+        assertEquals(new BalanceView(ALICE, 120, 0, 120), releaseLedger.balanceView(ALICE));
+        assertEquals(history, releaseLedger.history());
+        assertEquals(1, registrationIds.get());
+        assertEquals(1, generatedDates.get());
+    }
+
+    @Test
+    void releaseRejectsMissingAndConsumedIdsAndPreservesCallbackRefusalOrThrow() {
+        AtomicInteger callbacks = new AtomicInteger();
+        assertEquals(FailureCode.INVALID_STATE,
+                ledger.withRelease(new EngagementId("missing-release"), () -> {
+                    callbacks.incrementAndGet();
+                    return Result.success("unexpected");
+                }).failureCode().orElseThrow());
+        assertEquals(0, callbacks.get());
+
+        EngagementId settled = new EngagementId("release-settled");
+        ledger.withHold(settled, ALICE, BOB, 20, Result::success);
+        AtomicInteger settlementIds = new AtomicInteger();
+        assertTrue(ledger.withSettlement(settled, DATE,
+                () -> new TransactionId("settled-release-" + settlementIds.incrementAndGet()),
+                () -> Result.success("settled")).isSuccess());
+        assertEquals(FailureCode.INVALID_STATE,
+                ledger.withRelease(settled, () -> fail("settled engagement reached release callback"))
+                        .failureCode().orElseThrow());
+
+        EngagementId retry = new EngagementId("release-retry");
+        ledger.withHold(retry, ALICE, BOB, 20, Result::success);
+        List<Transaction> history = ledger.history();
+        BalanceView heldBalance = ledger.balanceView(ALICE);
+        Result<String> refusal = Result.failure(FailureCode.ATOMIC_OPERATION_FAILED, "owner declined");
+        AtomicInteger attempts = new AtomicInteger();
+        assertSame(refusal, ledger.withRelease(retry, () -> {
+            attempts.incrementAndGet();
+            return refusal;
+        }));
+        assertEquals(history, ledger.history());
+        assertEquals(heldBalance, ledger.balanceView(ALICE));
+        IllegalStateException problem = new IllegalStateException("release callback failed");
+        assertSame(problem, assertThrows(IllegalStateException.class, () -> ledger.withRelease(retry, () -> {
+            attempts.incrementAndGet();
+            throw problem;
+        })));
+        assertEquals(2, attempts.get());
+        assertEquals(history, ledger.history());
+        assertEquals(heldBalance, ledger.balanceView(ALICE));
+        assertTrue(ledger.withRelease(retry, () -> Result.success("retry succeeded")).isSuccess());
+        assertEquals(new BalanceView(ALICE, -21, 0, -21), ledger.balanceView(ALICE));
+        assertEquals(history, ledger.history());
+    }
+
+    @Test
+    void releaseIsRejectedDuringPublicationAndCanRetryOutsideWithGuardedCallback() {
+        EngagementId held = new EngagementId("nested-release");
+        EngagementId other = new EngagementId("other-active-hold");
+        EngagementId outer = new EngagementId("outer-publication");
+        ledger.withHold(held, ALICE, BOB, 20, Result::success);
+        ledger.withHold(other, ALICE, CAROL, 19, Result::success);
+        List<Transaction> history = ledger.history();
+        BalanceView heldBalance = ledger.balanceView(ALICE);
+        AtomicInteger refusedReleaseCallbacks = new AtomicInteger();
+        Result<BalanceView> outerRefusal = Result.failure(
+                FailureCode.ATOMIC_OPERATION_FAILED, "outer publication refused");
+        assertSame(outerRefusal, ledger.withHold(outer, BOB, CAROL, 1, candidate -> {
+            assertThrows(IllegalStateException.class, () -> ledger.withRelease(held, () -> {
+                refusedReleaseCallbacks.incrementAndGet();
+                return Result.success("unexpected");
+            }));
+            assertEquals(0, refusedReleaseCallbacks.get());
+            assertEquals(history, ledger.history());
+            assertEquals(heldBalance, ledger.balanceView(ALICE));
+            return outerRefusal;
+        }));
+        assertEquals(history, ledger.history());
+        assertEquals(heldBalance, ledger.balanceView(ALICE));
+        assertEquals(new BalanceView(BOB, 0, 0, 0), ledger.balanceView(BOB));
+
+        AtomicInteger releaseCallbacks = new AtomicInteger();
+        assertTrue(ledger.withRelease(held, () -> {
+            releaseCallbacks.incrementAndGet();
+            assertTrue(Thread.holdsLock(lock));
+            assertEquals(history, ledger.history());
+            assertEquals(heldBalance, ledger.balanceView(ALICE));
+            AtomicInteger nestedReleaseCallbacks = new AtomicInteger();
+            assertThrows(IllegalStateException.class, () -> ledger.withRelease(other, () -> {
+                nestedReleaseCallbacks.incrementAndGet();
+                return Result.success("unexpected");
+            }));
+            assertEquals(0, nestedReleaseCallbacks.get());
+            AtomicInteger nestedHoldCallbacks = new AtomicInteger();
+            assertThrows(IllegalStateException.class, () -> ledger.withHold(
+                    new EngagementId("nested-new-hold"), ALICE, BOB, 1, candidate -> {
+                        nestedHoldCallbacks.incrementAndGet();
+                        return Result.success(candidate);
+                    }));
+            assertEquals(0, nestedHoldCallbacks.get());
+            assertEquals(history, ledger.history());
+            assertEquals(heldBalance, ledger.balanceView(ALICE));
+            return Result.success("released");
+        }).isSuccess());
+        assertEquals(1, releaseCallbacks.get());
+        assertEquals(history, ledger.history());
+        assertEquals(new BalanceView(ALICE, 0, 19, -19), ledger.balanceView(ALICE));
+        assertEquals(new BalanceView(BOB, 0, 0, 0), ledger.balanceView(BOB));
+        assertTrue(ledger.withRelease(other, () -> Result.success("other released")).isSuccess());
+        assertEquals(new BalanceView(ALICE, 0, 0, 0), ledger.balanceView(ALICE));
+        assertTrue(ledger.withHold(outer, ALICE, BOB, 1, Result::success).isSuccess());
+        assertEquals(new BalanceView(BOB, 0, 0, 0), ledger.balanceView(BOB));
+    }
+
     private void assertMalformedHold(EngagementId engagementId, MemberId requester, MemberId helper, int duration) {
         assertEquals(FailureCode.MALFORMED_INPUT,
                 ledger.withHold(engagementId, requester, helper, duration,
