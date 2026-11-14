@@ -2,11 +2,14 @@ package ie.ucd.meitheal.cli;
 
 import ie.ucd.meitheal.app.RegistrationService;
 import ie.ucd.meitheal.app.RequestService;
+import ie.ucd.meitheal.app.SelectionService;
+import ie.ucd.meitheal.shared.id.RequestId;
 import ie.ucd.meitheal.shared.id.MemberId;
 import ie.ucd.meitheal.shared.result.FailureCode;
 import ie.ucd.meitheal.shared.result.Result;
 import ie.ucd.meitheal.shared.view.BalanceView;
 import ie.ucd.meitheal.shared.view.CategoryView;
+import ie.ucd.meitheal.shared.view.EngagementView;
 import ie.ucd.meitheal.shared.view.MemberView;
 import ie.ucd.meitheal.shared.view.ProposalView;
 import ie.ucd.meitheal.shared.view.RequestView;
@@ -72,10 +75,11 @@ public final class RegistrationConsole {
             case "1" -> registration();
             case "2" -> login();
             case "3", "4", "5" -> requestAction(choice.trim());
+            case "6" -> selectProposal();
             case "11" -> {
                 if (requireMember("view balance and history")) balanceMenu();
             }
-            case "6", "7", "8", "10" -> unavailable(choice, true);
+            case "7", "8", "10" -> unavailable(choice, true);
             case "9", "12", "13" -> unavailable(choice, false);
             default -> line("Choose one of the listed options.");
         }
@@ -152,6 +156,53 @@ public final class RegistrationConsole {
             case "3" -> publishSkill(requests);
             case "4" -> raiseRequest(requests);
             case "5" -> findMatches(requests);
+        }
+    }
+
+    private void selectProposal() throws IOException {
+        if (!requireMember("select a proposal")) return;
+        if (!(service instanceof SelectionService selections)) {
+            unavailable("6", false);
+            return;
+        }
+        clear();
+        while (running) {
+            String rawRequestId = readLine("Request ID (or 0 Back): ");
+            if (rawRequestId == null) return;
+            String requestId = rawRequestId.strip();
+            if (requestId.equals("0")) return;
+            if (requestId.isEmpty()) {
+                line("Enter a request ID, or 0 Back.");
+                continue;
+            }
+            Result<List<ProposalView>> result = selections.proposalsForRequest(selected.id(),
+                    new RequestId(requestId));
+            if (result.isFailure()) {
+                failure(result);
+                return;
+            }
+            List<ProposalView> proposals = result.value().orElseThrow();
+            if (proposals.isEmpty()) {
+                line("No proposals found for this request.");
+                pauseForBack();
+                return;
+            }
+            line("Proposals for request " + requestId);
+            for (int index = 0; index < proposals.size(); index++) {
+                ProposalView proposal = proposals.get(index);
+                line((index + 1) + " Proposal " + proposal.id().value() + " | Helper "
+                        + proposal.helperId().value() + " | " + proposal.proposedOn() + " | " + proposal.status());
+            }
+            ProposalView proposal = choose(proposals, "Proposal number to select: ");
+            if (proposal == null) continue;
+            Result<EngagementView> selectedProposal = selections.selectProposal(selected.id(), proposal.id());
+            if (selectedProposal.isFailure()) {
+                failure(selectedProposal);
+                return;
+            }
+            line("Proposal selected. Engagement ID: " + selectedProposal.value().orElseThrow().id().value());
+            pauseForBack();
+            return;
         }
     }
 
