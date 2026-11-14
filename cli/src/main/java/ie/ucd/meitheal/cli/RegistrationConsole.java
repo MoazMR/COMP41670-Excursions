@@ -1,6 +1,7 @@
 package ie.ucd.meitheal.cli;
 
 import ie.ucd.meitheal.app.ConfirmationService;
+import ie.ucd.meitheal.app.CancellationService;
 import ie.ucd.meitheal.app.RegistrationService;
 import ie.ucd.meitheal.app.RequestService;
 import ie.ucd.meitheal.app.SelectionService;
@@ -83,7 +84,8 @@ public final class RegistrationConsole {
                 if (requireMember("view balance and history")) balanceMenu();
             }
             case "7" -> confirmEngagement();
-            case "8", "10" -> unavailable(choice, true);
+            case "8" -> cancelEngagement();
+            case "10" -> unavailable(choice, true);
             case "9", "12", "13" -> unavailable(choice, false);
             default -> line("Choose one of the listed options.");
         }
@@ -239,6 +241,41 @@ public final class RegistrationConsole {
                 line("Session completed and settled.");
             } else {
                 line("Engagement status: " + status);
+            }
+            pauseForBack();
+            return;
+        }
+    }
+
+    private void cancelEngagement() throws IOException {
+        if (!requireMember("cancel an engagement")) return;
+        if (!(service instanceof CancellationService cancellations)) {
+            unavailable("8", false);
+            return;
+        }
+        clear();
+        while (running) {
+            String rawEngagementId = readLine("Engagement ID (or 0 Back): ");
+            if (rawEngagementId == null) return;
+            String engagementId = rawEngagementId.strip();
+            if (engagementId.equals("0")) return;
+            if (engagementId.isEmpty()) {
+                line("Enter an engagement ID, or 0 Back.");
+                continue;
+            }
+            Result<EngagementView> result = cancellations.cancelEngagement(selected.id(),
+                    new EngagementId(engagementId));
+            if (result.isFailure()) {
+                failure(result);
+                return;
+            }
+            EngagementView engagement = result.value().orElseThrow();
+            if (engagement.status() == EngagementStatus.CANCELLED) {
+                line(engagement.lateCancellation()
+                        ? "Engagement cancelled late. Hold released."
+                        : "Engagement cancelled early. Hold released.");
+            } else {
+                line("Engagement status: " + engagement.status());
             }
             pauseForBack();
             return;
