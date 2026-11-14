@@ -430,6 +430,55 @@ public final class EngagementManager {
         }
     }
 
+    public Result<EngagementView> withCancellation(MemberId participantId, EngagementId engagementId,
+            LocalDate today, Function<EngagementView, Result<EngagementView>> releaseBeforePublish) {
+        synchronized (commonLock) {
+            if (ownerCallbackActive) {
+                return callbackMutationFailure();
+            }
+            if (participantId == null || engagementId == null || today == null || releaseBeforePublish == null) {
+                return Result.failure(FailureCode.MALFORMED_INPUT, "Cancellation fields are required");
+            }
+            EngagementView engagement = engagementsById.get(engagementId);
+            if (engagement == null) {
+                return Result.failure(FailureCode.ENGAGEMENT_NOT_FOUND, "Engagement not found");
+            }
+            if (!participantId.equals(engagement.requesterId()) && !participantId.equals(engagement.helperId())) {
+                return Result.failure(FailureCode.NOT_PARTICIPANT, "Member is not an engagement participant");
+            }
+            if (engagement.status() != EngagementStatus.AGREED) {
+                return Result.failure(FailureCode.INVALID_STATE, "Engagement is not awaiting cancellation");
+            }
+            if (!today.isBefore(engagement.scheduledDate())) {
+                return Result.failure(FailureCode.CANCELLATION_CLOSED, "Cancellation closes on the scheduled date");
+            }
+
+            boolean late = today.plusDays(1).equals(engagement.scheduledDate());
+            EngagementView candidate = new EngagementView(engagement.id(), engagement.proposalId(),
+                engagement.requestId(), engagement.requesterId(), engagement.helperId(),
+                engagement.durationMinutes(), engagement.scheduledDate(), EngagementStatus.CANCELLED,
+                engagement.confirmationActors(), participantId, today, late);
+            Map<EngagementId, EngagementView> candidateEngagements = new LinkedHashMap<>(engagementsById);
+            candidateEngagements.put(engagementId, candidate);
+            Result<EngagementView> preparedResult = Result.success(candidate);
+            Result<EngagementView> callbackResult;
+            ownerCallbackActive = true;
+            try {
+                callbackResult = releaseBeforePublish.apply(candidate);
+                if (callbackResult == null) {
+                    throw new NullPointerException("Cancellation callback returned null");
+                }
+            } finally {
+                ownerCallbackActive = false;
+            }
+            if (callbackResult.isFailure()) {
+                return callbackResult;
+            }
+            engagementsById = candidateEngagements;
+            return preparedResult;
+        }
+    }
+
     public Result<List<EngagementView>> engagementsForMember(MemberId memberId) {
         synchronized (commonLock) {
             if (memberId == null) {
