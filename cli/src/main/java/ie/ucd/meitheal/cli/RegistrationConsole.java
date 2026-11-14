@@ -1,12 +1,15 @@
 package ie.ucd.meitheal.cli;
 
+import ie.ucd.meitheal.app.ConfirmationService;
 import ie.ucd.meitheal.app.RegistrationService;
 import ie.ucd.meitheal.app.RequestService;
 import ie.ucd.meitheal.app.SelectionService;
-import ie.ucd.meitheal.shared.id.RequestId;
+import ie.ucd.meitheal.shared.id.EngagementId;
 import ie.ucd.meitheal.shared.id.MemberId;
+import ie.ucd.meitheal.shared.id.RequestId;
 import ie.ucd.meitheal.shared.result.FailureCode;
 import ie.ucd.meitheal.shared.result.Result;
+import ie.ucd.meitheal.shared.model.EngagementStatus;
 import ie.ucd.meitheal.shared.view.BalanceView;
 import ie.ucd.meitheal.shared.view.CategoryView;
 import ie.ucd.meitheal.shared.view.EngagementView;
@@ -79,7 +82,8 @@ public final class RegistrationConsole {
             case "11" -> {
                 if (requireMember("view balance and history")) balanceMenu();
             }
-            case "7", "8", "10" -> unavailable(choice, true);
+            case "7" -> confirmEngagement();
+            case "8", "10" -> unavailable(choice, true);
             case "9", "12", "13" -> unavailable(choice, false);
             default -> line("Choose one of the listed options.");
         }
@@ -201,6 +205,41 @@ public final class RegistrationConsole {
                 return;
             }
             line("Proposal selected. Engagement ID: " + selectedProposal.value().orElseThrow().id().value());
+            pauseForBack();
+            return;
+        }
+    }
+
+    private void confirmEngagement() throws IOException {
+        if (!requireMember("confirm a session")) return;
+        if (!(service instanceof ConfirmationService confirmations)) {
+            unavailable("7", false);
+            return;
+        }
+        clear();
+        while (running) {
+            String rawEngagementId = readLine("Engagement ID (or 0 Back): ");
+            if (rawEngagementId == null) return;
+            String engagementId = rawEngagementId.strip();
+            if (engagementId.equals("0")) return;
+            if (engagementId.isEmpty()) {
+                line("Enter an engagement ID, or 0 Back.");
+                continue;
+            }
+            Result<EngagementView> result = confirmations.confirmEngagement(selected.id(),
+                    new EngagementId(engagementId));
+            if (result.isFailure()) {
+                failure(result);
+                return;
+            }
+            EngagementStatus status = result.value().orElseThrow().status();
+            if (status == EngagementStatus.AGREED) {
+                line("Confirmation recorded. Waiting for the other participant.");
+            } else if (status == EngagementStatus.COMPLETED) {
+                line("Session completed and settled.");
+            } else {
+                line("Engagement status: " + status);
+            }
             pauseForBack();
             return;
         }
