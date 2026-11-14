@@ -8,6 +8,7 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.concurrent.atomic.AtomicReference;
@@ -19,11 +20,30 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 class LedgerManagerTest {
     private static final MemberId ALICE = new MemberId("100001");
     private static final MemberId BOB = new MemberId("100002");
     private static final LocalDate GRANT_DATE = LocalDate.of(2026, 11, 8);
+
+    @Test
+    void fundIsSeparateFromSystemAndMemberWithSameTextualId() {
+        AccountReference fund = AccountReference.FUND;
+        AccountReference system = AccountReference.SYSTEM;
+        AccountReference member = AccountReference.member(new MemberId("community-fund"));
+
+        assertTrue(fund.isFund());
+        assertFalse(fund.isSystem());
+        assertNotEquals(system, fund);
+        assertNotEquals(member, fund);
+        IllegalStateException fundException = assertThrows(IllegalStateException.class, fund::memberId);
+        IllegalStateException systemException = assertThrows(IllegalStateException.class, system::memberId);
+        assertEquals("fund account has no member ID", fundException.getMessage());
+        assertEquals("system account has no member ID", systemException.getMessage());
+        assertEquals(Objects.hashCode(new MemberId("community-fund")), member.hashCode());
+        assertEquals(Objects.hashCode(null), system.hashCode());
+    }
 
     @Test
     void firstWelcomeGrantCreditsExactly120() {
