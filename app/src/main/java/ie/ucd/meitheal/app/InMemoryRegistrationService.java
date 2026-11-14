@@ -3,6 +3,7 @@ package ie.ucd.meitheal.app;
 import ie.ucd.meitheal.engagement.EngagementManager;
 import ie.ucd.meitheal.ledger.LedgerManager;
 import ie.ucd.meitheal.membermanager.MemberDirectory;
+import ie.ucd.meitheal.shared.id.EngagementId;
 import ie.ucd.meitheal.shared.id.ProposalId;
 import ie.ucd.meitheal.shared.id.RequestId;
 import ie.ucd.meitheal.shared.port.CategoryCatalog;
@@ -32,7 +33,7 @@ import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 /** In-memory implementation of registration backed by the membership and ledger owners. */
-public final class InMemoryRegistrationService implements SelectionService {
+public final class InMemoryRegistrationService implements ConfirmationService {
     private final Object lock;
     private final MemberManager members;
     private final LedgerManager ledger;
@@ -42,6 +43,7 @@ public final class InMemoryRegistrationService implements SelectionService {
     private final MemberDirectory directory;
     private final EngagementManager engagements;
     private final SelectionCoordinator selectionCoordinator;
+    private final ConfirmationCoordinator confirmationCoordinator;
     private long nextRequest = 1;
     private long nextProposal = 1;
 
@@ -69,6 +71,14 @@ public final class InMemoryRegistrationService implements SelectionService {
     InMemoryRegistrationService(Object lock, MemberManager members, LedgerManager ledger,
             SimulatedClock clock, Supplier<TransactionId> transactionIds, CategoryCatalog catalogue,
             Runnable beforePublication, Consumer<EngagementView> beforeSelectionPublication) {
+        this(lock, members, ledger, clock, transactionIds, catalogue, beforePublication,
+                beforeSelectionPublication, ignored -> { });
+    }
+
+    InMemoryRegistrationService(Object lock, MemberManager members, LedgerManager ledger,
+            SimulatedClock clock, Supplier<TransactionId> transactionIds, CategoryCatalog catalogue,
+            Runnable beforePublication, Consumer<EngagementView> beforeSelectionPublication,
+            Consumer<EngagementView> beforeConfirmationPublication) {
         this.lock = Objects.requireNonNull(lock, "lock");
         this.members = Objects.requireNonNull(members, "members");
         this.ledger = Objects.requireNonNull(ledger, "ledger");
@@ -76,6 +86,9 @@ public final class InMemoryRegistrationService implements SelectionService {
         this.directory = new MemberDirectory(members);
         this.engagements = new EngagementManager(directory, catalogue, clock, lock);
         this.selectionCoordinator = new SelectionCoordinator(lock, engagements, ledger, beforeSelectionPublication);
+        this.confirmationCoordinator = new ConfirmationCoordinator(lock, clock,
+                Objects.requireNonNull(transactionIds, "transactionIds"), engagements::withConfirmation,
+                ledger::withSettlement, beforeConfirmationPublication);
         Objects.requireNonNull(beforePublication, "beforePublication");
         RegistrationCoordinator.MembershipRegistration membership = (id, name, email, callback) -> {
             try {
@@ -201,6 +214,11 @@ public final class InMemoryRegistrationService implements SelectionService {
     @Override
     public Result<EngagementView> selectProposal(MemberId requesterId, ProposalId proposalId) {
         return selectionCoordinator.select(requesterId, proposalId);
+    }
+
+    @Override
+    public Result<EngagementView> confirmEngagement(MemberId participantId, EngagementId engagementId) {
+        return confirmationCoordinator.confirm(participantId, engagementId);
     }
 
     EngagementManager engagementManagerForTests() { return engagements; }
