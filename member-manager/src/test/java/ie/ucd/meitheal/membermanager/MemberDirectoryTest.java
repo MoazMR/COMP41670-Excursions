@@ -16,6 +16,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class MemberDirectoryTest {
     private static final MemberId HELPER = new MemberId("100001");
     private static final CategoryId GARDENING = new CategoryId("gardening");
+    private static final CategoryId COOKING = new CategoryId("cooking");
     private final MemberManager members = new MemberManager(Set.of(
             new ie.ucd.meitheal.membermanager.CategoryId(GARDENING.value())));
     private final MemberManagerPort directory = new MemberDirectory(members);
@@ -62,20 +63,33 @@ class MemberDirectoryTest {
 
     @Test
     void eligibilityTracksSuspensionAndReinstatementWithSkillsPreserved() {
-        members.commitRegistration(members.prepareRegistration(HELPER, "Alex", "alex@example.com"));
-        directory.offer(HELPER, GARDENING).value().orElseThrow();
-        members.suspend(HELPER);
+        var lifecycleMembers = new MemberManager(Set.of(
+                new ie.ucd.meitheal.membermanager.CategoryId(GARDENING.value()),
+                new ie.ucd.meitheal.membermanager.CategoryId(COOKING.value())));
+        var lifecycleDirectory = new MemberDirectory(lifecycleMembers);
+        lifecycleMembers.commitRegistration(lifecycleMembers.prepareRegistration(HELPER, "Alex", "alex@example.com"));
+        var offered = lifecycleDirectory.offer(HELPER, GARDENING).value().orElseThrow();
+        lifecycleMembers.suspend(HELPER);
 
-        assertFalse(directory.isEligible(HELPER).value().orElseThrow());
-        assertEquals(FailureCode.SUSPENDED_MEMBER, directory.offer(HELPER, GARDENING).failureCode().orElseThrow());
-        var suspended = directory.findById(HELPER).value().orElseThrow();
+        assertFalse(lifecycleDirectory.isEligible(HELPER).value().orElseThrow());
+        assertEquals(FailureCode.SUSPENDED_MEMBER,
+                lifecycleDirectory.offer(HELPER, GARDENING).failureCode().orElseThrow());
+        var suspended = lifecycleDirectory.findById(HELPER).value().orElseThrow();
         assertEquals(MemberStatus.SUSPENDED, suspended.status());
+        assertEquals(offered.id(), suspended.id());
+        assertEquals(offered.name(), suspended.name());
+        assertEquals(offered.canonicalEmail(), suspended.canonicalEmail());
+        assertEquals(suspended,
+                lifecycleDirectory.findByCanonicalEmail(offered.canonicalEmail()).value().orElseThrow());
         assertEquals(Set.of(GARDENING), suspended.categories());
 
-        var reinstated = directory.reinstate(HELPER).value().orElseThrow();
+        var reinstated = lifecycleDirectory.reinstate(HELPER).value().orElseThrow();
         assertEquals(MemberStatus.ACTIVE, reinstated.status());
         assertEquals(Set.of(GARDENING), reinstated.categories());
-        assertTrue(directory.isEligible(HELPER).value().orElseThrow());
-        assertEquals(FailureCode.INVALID_STATE, directory.reinstate(HELPER).failureCode().orElseThrow());
+        assertTrue(lifecycleDirectory.isEligible(HELPER).value().orElseThrow());
+        assertEquals(Set.of(GARDENING, COOKING),
+                lifecycleDirectory.offer(HELPER, COOKING).value().orElseThrow().categories());
+        assertEquals(FailureCode.INVALID_STATE,
+                lifecycleDirectory.reinstate(HELPER).failureCode().orElseThrow());
     }
 }
