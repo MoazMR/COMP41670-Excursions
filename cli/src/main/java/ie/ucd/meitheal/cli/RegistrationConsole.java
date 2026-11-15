@@ -5,6 +5,7 @@ import ie.ucd.meitheal.app.CancellationService;
 import ie.ucd.meitheal.app.RegistrationService;
 import ie.ucd.meitheal.app.RequestService;
 import ie.ucd.meitheal.app.SelectionService;
+import ie.ucd.meitheal.app.SuspensionService;
 import ie.ucd.meitheal.shared.id.EngagementId;
 import ie.ucd.meitheal.shared.id.MemberId;
 import ie.ucd.meitheal.shared.id.RequestId;
@@ -86,7 +87,8 @@ public final class RegistrationConsole {
             case "7" -> confirmEngagement();
             case "8" -> cancelEngagement();
             case "10" -> unavailable(choice, true);
-            case "9", "12", "13" -> unavailable(choice, false);
+            case "9" -> suspendOrReinstate();
+            case "12", "13" -> unavailable(choice, false);
             default -> line("Choose one of the listed options.");
         }
     }
@@ -277,6 +279,55 @@ public final class RegistrationConsole {
             } else {
                 line("Engagement status: " + engagement.status());
             }
+            pauseForBack();
+            return;
+        }
+    }
+
+    private void suspendOrReinstate() throws IOException {
+        if (!(service instanceof SuspensionService suspensions)) {
+            unavailable("9", false);
+            return;
+        }
+        clear();
+        while (running) {
+            String rawTarget = readLine("Member ID or email (or 0 Back): ");
+            if (rawTarget == null) return;
+            String target = rawTarget.strip();
+            if (target.equals("0")) return;
+            if (target.isEmpty()) {
+                line("Enter a member ID or email, or 0 Back.");
+                continue;
+            }
+            Result<MemberView> found = target.contains("@")
+                    ? service.findMemberByEmail(target) : service.findMember(new MemberId(target));
+            if (found.isFailure()) {
+                failure(found);
+                return;
+            }
+            MemberView member = found.value().orElseThrow();
+            line("Current status: " + member.status());
+            line("1 Suspend\n2 Reinstate\n0 Back");
+            String choice = null;
+            while (running) {
+                choice = readLine("> ");
+                if (choice == null || choice.trim().equals("0")) return;
+                choice = choice.trim();
+                if (choice.equals("1") || choice.equals("2")) break;
+                line("Choose 1, 2 or 0.");
+            }
+            if (!running) return;
+            boolean suspend = "1".equals(choice);
+            Result<MemberView> result = suspend
+                    ? suspensions.suspendMember(member.id()) : suspensions.reinstateMember(member.id());
+            if (result.isFailure()) {
+                failure(result);
+                return;
+            }
+            MemberView updated = result.value().orElseThrow();
+            line(suspend ? "Member suspended." : "Member reinstated.");
+            line("Current status: " + updated.status());
+            if (selected != null && selected.id().equals(updated.id())) selected = updated;
             pauseForBack();
             return;
         }
