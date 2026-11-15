@@ -13,6 +13,8 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
 import ie.ucd.meitheal.shared.id.MemberId;
+import ie.ucd.meitheal.shared.result.FailureCode;
+import ie.ucd.meitheal.shared.result.Result;
 
 public final class MemberManager {
     private final Object lock;
@@ -21,7 +23,7 @@ public final class MemberManager {
     private final Map<UUID, PreparedRegistration> preparedRegistrations = new HashMap<>();
     private final Map<String, UUID> reservationTokensByCanonicalEmail = new HashMap<>();
     private final Set<CategoryId> configuredCategories;
-    private boolean registrationCallbackActive;
+    private String activeWriteCallbackName;
 
     public MemberManager(Collection<CategoryId> configuredCategories) {
         this(new Object(), configuredCategories);
@@ -65,14 +67,14 @@ public final class MemberManager {
             var nextMemberIdsByCanonicalEmail = new HashMap<>(memberIdsByCanonicalEmail);
             nextMemberIdsByCanonicalEmail.put(canonicalEmail, id);
 
-            registrationCallbackActive = true;
+            activeWriteCallbackName = "registration";
             try {
                 var result = beforePublish.apply(member);
                 membersById = nextMembersById;
                 memberIdsByCanonicalEmail = nextMemberIdsByCanonicalEmail;
                 return result;
             } finally {
-                registrationCallbackActive = false;
+                activeWriteCallbackName = null;
             }
         }
     }
@@ -164,25 +166,43 @@ public final class MemberManager {
     public Member suspend(MemberId memberId) {
         synchronized (lock) {
             rejectReentrantWrite();
-            var member = requireMember(memberId);
-            if (member.status() != MemberStatus.ACTIVE) {
-                throw failure(MemberManagerException.Code.INVALID_STATE, "Only an active member can be suspended");
-            }
-            var suspended = member.withStatus(MemberStatus.SUSPENDED);
+            var suspended = proposedSuspension(memberId);
             membersById.put(memberId, suspended);
             return suspended;
+        }
+    }
+
+    public <T> Result<T> withSuspension(MemberId memberId, Function<Member, Result<T>> beforePublish) {
+        synchronized (lock) {
+            rejectReentrantWrite();
+            final Member suspended;
+            try {
+                suspended = proposedSuspension(memberId);
+            } catch (MemberManagerException failure) {
+                return Result.failure(failure.code() == MemberManagerException.Code.MEMBER_NOT_FOUND
+                        ? FailureCode.MEMBER_NOT_FOUND : FailureCode.INVALID_STATE, failure.getMessage());
+            }
+            Objects.requireNonNull(beforePublish, "beforePublish");
+            var nextMembersById = new LinkedHashMap<>(membersById);
+            nextMembersById.put(memberId, suspended);
+
+            activeWriteCallbackName = "suspension";
+            try {
+                var result = Objects.requireNonNull(beforePublish.apply(suspended), "callback result");
+                if (result.isSuccess()) {
+                    membersById = nextMembersById;
+                }
+                return result;
+            } finally {
+                activeWriteCallbackName = null;
+            }
         }
     }
 
     public Member reinstate(MemberId memberId) {
         synchronized (lock) {
             rejectReentrantWrite();
-            var member = requireMember(memberId);
-            if (member.status() != MemberStatus.SUSPENDED) {
-                throw failure(MemberManagerException.Code.INVALID_STATE,
-                        "Only a suspended member can be reinstated");
-            }
-            var active = member.withStatus(MemberStatus.ACTIVE);
+            var active = transition(memberId, MemberStatus.SUSPENDED, MemberStatus.ACTIVE);
             membersById.put(memberId, active);
             return active;
         }
@@ -235,10 +255,25 @@ public final class MemberManager {
     }
 
     private void rejectReentrantWrite() {
-        if (registrationCallbackActive) {
+        if (activeWriteCallbackName != null) {
             throw failure(MemberManagerException.Code.INVALID_REGISTRATION,
-                    "Writes are not allowed during a registration callback");
+                    "Writes are not allowed during a " + activeWriteCallbackName + " callback");
         }
+    }
+
+    private Member proposedSuspension(MemberId memberId) {
+        return transition(memberId, MemberStatus.ACTIVE, MemberStatus.SUSPENDED);
+    }
+
+    private Member transition(MemberId memberId, MemberStatus requiredStatus, MemberStatus nextStatus) {
+        var member = requireMember(memberId);
+        if (member.status() != requiredStatus) {
+            var message = requiredStatus == MemberStatus.ACTIVE
+                    ? "Only an active member can be suspended"
+                    : "Only a suspended member can be reinstated";
+            throw failure(MemberManagerException.Code.INVALID_STATE, message);
+        }
+        return member.withStatus(nextStatus);
     }
 
     private Member requireMember(MemberId memberId) {
