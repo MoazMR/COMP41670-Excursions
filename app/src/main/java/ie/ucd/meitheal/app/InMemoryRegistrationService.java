@@ -33,7 +33,7 @@ import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 /** In-memory implementation of registration backed by the membership and ledger owners. */
-public final class InMemoryRegistrationService implements CancellationService {
+public final class InMemoryRegistrationService implements SuspensionService {
     private final Object lock;
     private final MemberManager members;
     private final LedgerManager ledger;
@@ -45,6 +45,7 @@ public final class InMemoryRegistrationService implements CancellationService {
     private final SelectionCoordinator selectionCoordinator;
     private final ConfirmationCoordinator confirmationCoordinator;
     private final CancellationCoordinator cancellationCoordinator;
+    private final Runnable beforeSuspensionPublication;
     private long nextRequest = 1;
     private long nextProposal = 1;
 
@@ -89,6 +90,15 @@ public final class InMemoryRegistrationService implements CancellationService {
             Runnable beforePublication, Consumer<EngagementView> beforeSelectionPublication,
             Consumer<EngagementView> beforeConfirmationPublication,
             Consumer<EngagementView> beforeCancellationPublication) {
+        this(lock, members, ledger, clock, transactionIds, catalogue, beforePublication,
+                beforeSelectionPublication, beforeConfirmationPublication, beforeCancellationPublication, () -> { });
+    }
+
+    InMemoryRegistrationService(Object lock, MemberManager members, LedgerManager ledger,
+            SimulatedClock clock, Supplier<TransactionId> transactionIds, CategoryCatalog catalogue,
+            Runnable beforePublication, Consumer<EngagementView> beforeSelectionPublication,
+            Consumer<EngagementView> beforeConfirmationPublication,
+            Consumer<EngagementView> beforeCancellationPublication, Runnable beforeSuspensionPublication) {
         this.lock = Objects.requireNonNull(lock, "lock");
         this.members = Objects.requireNonNull(members, "members");
         this.ledger = Objects.requireNonNull(ledger, "ledger");
@@ -101,6 +111,7 @@ public final class InMemoryRegistrationService implements CancellationService {
                 ledger::withSettlement, beforeConfirmationPublication);
         this.cancellationCoordinator = new CancellationCoordinator(lock, clock,
                 engagements::withCancellation, ledger::withRelease, beforeCancellationPublication);
+        this.beforeSuspensionPublication = Objects.requireNonNull(beforeSuspensionPublication);
         Objects.requireNonNull(beforePublication, "beforePublication");
         RegistrationCoordinator.MembershipRegistration membership = (id, name, email, callback) -> {
             try {
@@ -144,6 +155,42 @@ public final class InMemoryRegistrationService implements CancellationService {
                     ledger.balanceOf(memberId)))).orElseGet(() -> Result.failure(
                     FailureCode.MEMBER_NOT_FOUND, "Member does not exist"));
         }
+    }
+
+    @Override
+    public Result<MemberView> suspendMember(MemberId memberId) {
+        synchronized (lock) {
+            if (memberId == null) return Result.failure(FailureCode.MEMBER_NOT_FOUND, "Member does not exist");
+            try {
+                return members.withSuspension(memberId, member -> engagements.withProposalCleanup(memberId, () -> {
+                    Result<MemberView> prepared = Result.success(toView(member, ledger.balanceOf(memberId)));
+                    beforeSuspensionPublication.run();
+                    return prepared;
+                }));
+            } catch (RuntimeException failure) {
+                return Result.failure(FailureCode.ATOMIC_OPERATION_FAILED, "Suspension could not be committed");
+            }
+        }
+    }
+
+    @Override
+    public Result<MemberView> reinstateMember(MemberId memberId) {
+        synchronized (lock) {
+            try {
+                Member member = members.reinstate(memberId);
+                return Result.success(toView(member, ledger.balanceOf(memberId)));
+            } catch (MemberManagerException failure) {
+                return reinstatementFailure(failure);
+            }
+        }
+    }
+
+    private static Result<MemberView> reinstatementFailure(MemberManagerException failure) {
+        return switch (failure.code()) {
+            case MEMBER_NOT_FOUND -> Result.failure(FailureCode.MEMBER_NOT_FOUND, failure.getMessage());
+            case INVALID_STATE -> Result.failure(FailureCode.INVALID_STATE, failure.getMessage());
+            default -> Result.failure(FailureCode.ATOMIC_OPERATION_FAILED, failure.getMessage());
+        };
     }
 
     @Override
