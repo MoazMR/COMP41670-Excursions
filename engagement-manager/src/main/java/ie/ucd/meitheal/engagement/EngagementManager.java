@@ -367,6 +367,44 @@ public final class EngagementManager {
         }
     }
 
+    public <T> Result<T> withProposalCleanup(MemberId memberId, Supplier<Result<T>> beforePublish) {
+        synchronized (commonLock) {
+            if (ownerCallbackActive) {
+                return callbackMutationFailure();
+            }
+            if (memberId == null || beforePublish == null) {
+                return Result.failure(FailureCode.MALFORMED_INPUT, "Member ID and cleanup callback are required");
+            }
+
+            Map<ProposalId, ProposalView> candidateProposals = new LinkedHashMap<>(proposalsById);
+            for (ProposalView proposal : proposalsById.values()) {
+                RequestView request = requestsById.get(proposal.requestId());
+                if (proposal.status() == ProposalStatus.PENDING
+                        && (memberId.equals(proposal.helperId())
+                            || (request != null && memberId.equals(request.requesterId())))) {
+                    candidateProposals.put(proposal.id(), new ProposalView(proposal.id(), proposal.requestId(),
+                        proposal.helperId(), proposal.proposedOn(), ProposalStatus.INVALIDATED));
+                }
+            }
+
+            Result<T> callbackResult;
+            ownerCallbackActive = true;
+            try {
+                callbackResult = beforePublish.get();
+                if (callbackResult == null) {
+                    throw new NullPointerException("Proposal cleanup callback returned null");
+                }
+            } finally {
+                ownerCallbackActive = false;
+            }
+            if (callbackResult.isFailure()) {
+                return callbackResult;
+            }
+            proposalsById = candidateProposals;
+            return callbackResult;
+        }
+    }
+
     public Result<EngagementView> withConfirmation(MemberId participantId, EngagementId engagementId,
             LocalDate today, Function<EngagementView, Result<EngagementView>> settleBeforePublish) {
         synchronized (commonLock) {
