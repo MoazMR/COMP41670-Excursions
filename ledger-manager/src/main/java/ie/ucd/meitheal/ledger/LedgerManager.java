@@ -6,6 +6,9 @@ import ie.ucd.meitheal.shared.id.TransactionId;
 import ie.ucd.meitheal.shared.result.FailureCode;
 import ie.ucd.meitheal.shared.result.Result;
 import ie.ucd.meitheal.shared.view.BalanceView;
+import ie.ucd.meitheal.shared.view.CommunityGrantView;
+import ie.ucd.meitheal.shared.view.ReportView;
+import ie.ucd.meitheal.shared.view.TransactionView;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -60,7 +63,7 @@ public final class LedgerManager {
                 TransactionId transactionId =
                         Objects.requireNonNull(transactionIdGenerator.get(), "generated transaction ID");
                 LocalDate date = Objects.requireNonNull(dateGenerator.get(), "generated date");
-                PreparedGrant prepared = prepareWelcomeGrant(transactionId, date, creditor);
+                PreparedEntry prepared = prepareEntry(createWelcomeGrantTransaction(transactionId, date, creditor));
                 publish(prepared);
                 return prepared.transaction();
             } finally {
@@ -83,7 +86,7 @@ public final class LedgerManager {
             AccountReference creditor = AccountReference.member(memberId);
             ensureWelcomeGrantDoesNotExist(creditor);
 
-            PreparedGrant prepared = prepareWelcomeGrant(transactionId, date, creditor);
+            PreparedEntry prepared = prepareEntry(createWelcomeGrantTransaction(transactionId, date, creditor));
 
             publicationCallbackActive = true;
             try {
@@ -96,26 +99,93 @@ public final class LedgerManager {
         }
     }
 
-    private PreparedGrant prepareWelcomeGrant(
-            TransactionId transactionId,
-            LocalDate date,
-            AccountReference creditor) {
-        Transaction transaction = createWelcomeGrantTransaction(transactionId, date, creditor);
+    public Result<CommunityGrantView> applyForCommunityGrant(MemberId memberId, long amount) {
+        synchronized (lock) {
+            ensureWritesAllowed();
+            if (memberId == null || amount <= 0) {
+                return Result.failure(FailureCode.INVALID_INPUT, "a member and positive grant amount are required");
+            }
+            AccountReference recipient = AccountReference.member(memberId);
+            if (balance(recipient) >= 0) {
+                return Result.failure(FailureCode.BUSINESS_REJECTION, "a negative ledger balance is required");
+            }
+            if (balance(AccountReference.FUND) < amount) {
+                return Result.failure(FailureCode.INSUFFICIENT_COMMUNITY_FUND_CREDITS,
+                        "community fund cannot cover the grant");
+            }
+
+            publicationCallbackActive = true;
+            try {
+                LocalDate date = Objects.requireNonNull(dateGenerator.get(), "generated date");
+                LocalDate lastApproval = lastCommunityGrantDate(recipient);
+                if (lastApproval != null && !date.isAfter(lastApproval.plusMonths(1))) {
+                    return Result.failure(FailureCode.BUSINESS_REJECTION, "community grant cooldown is still active");
+                }
+                TransactionId id = Objects.requireNonNull(transactionIdGenerator.get(), "generated transaction ID");
+                PreparedEntry prepared = prepareEntry(new Transaction(
+                        id, AccountReference.FUND, recipient, amount, TransactionType.COMMUNITY_GRANT, date));
+                Result<CommunityGrantView> result = Result.success(new CommunityGrantView(memberId, amount, date));
+                publish(prepared);
+                return result;
+            } catch (RuntimeException exception) {
+                return Result.failure(FailureCode.ATOMIC_OPERATION_FAILED, "community grant could not be posted");
+            } finally {
+                publicationCallbackActive = false;
+            }
+        }
+    }
+
+    private LocalDate lastCommunityGrantDate(AccountReference recipient) {
+        // The posted grant is also the approval record, so publication updates both together.
+        for (int index = transactions.size() - 1; index >= 0; index--) {
+            Transaction transaction = transactions.get(index);
+            if (transaction.type() == TransactionType.COMMUNITY_GRANT && transaction.creditor().equals(recipient)) {
+                return transaction.date();
+            }
+        }
+        return null;
+    }
+
+    public List<TransactionView> memberLedgerHistory(MemberId memberId) {
+        return history(memberId).stream().map(Transaction::toView).toList();
+    }
+
+    public ReportView report() {
+        synchronized (lock) {
+            long memberCount = transactions.stream()
+                    .filter(transaction -> transaction.type() == TransactionType.WELCOME_GRANT)
+                    .map(Transaction::creditor)
+                    .distinct()
+                    .count();
+            long memberBalanceTotal = 0;
+            for (Transaction transaction : transactions) {
+                if (transaction.creditor().isMember()) {
+                    memberBalanceTotal += transaction.amount();
+                }
+                if (transaction.debtor().isMember()) {
+                    memberBalanceTotal -= transaction.amount();
+                }
+            }
+            return new ReportView(memberCount, memberBalanceTotal, balance(AccountReference.FUND));
+        }
+    }
+
+    private PreparedEntry prepareEntry(Transaction transaction) {
         List<Transaction> nextTransactions = new ArrayList<>(transactions);
         Set<TransactionId> nextTransactionIds = new HashSet<>(transactionIds);
         if (!nextTransactionIds.add(transaction.transactionId())) {
             throw new IllegalStateException("duplicate transaction ID: " + transaction.transactionId());
         }
         nextTransactions.add(transaction);
-        return new PreparedGrant(transaction, nextTransactions, nextTransactionIds);
+        return new PreparedEntry(transaction, nextTransactions, nextTransactionIds);
     }
 
-    private void publish(PreparedGrant prepared) {
+    private void publish(PreparedEntry prepared) {
         transactions = prepared.transactions();
         transactionIds = prepared.transactionIds();
     }
 
-    private record PreparedGrant(
+    private record PreparedEntry(
             Transaction transaction,
             List<Transaction> transactions,
             Set<TransactionId> transactionIds) { }
