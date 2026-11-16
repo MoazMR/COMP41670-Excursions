@@ -2,6 +2,7 @@ package ie.ucd.meitheal.cli;
 
 import ie.ucd.meitheal.app.ConfirmationService;
 import ie.ucd.meitheal.app.CancellationService;
+import ie.ucd.meitheal.app.CommunityFinanceService;
 import ie.ucd.meitheal.app.RegistrationService;
 import ie.ucd.meitheal.app.RequestService;
 import ie.ucd.meitheal.app.SelectionService;
@@ -12,12 +13,16 @@ import ie.ucd.meitheal.shared.id.RequestId;
 import ie.ucd.meitheal.shared.result.FailureCode;
 import ie.ucd.meitheal.shared.result.Result;
 import ie.ucd.meitheal.shared.model.EngagementStatus;
+import ie.ucd.meitheal.shared.view.AccountReferenceView;
 import ie.ucd.meitheal.shared.view.BalanceView;
 import ie.ucd.meitheal.shared.view.CategoryView;
+import ie.ucd.meitheal.shared.view.CommunityGrantView;
 import ie.ucd.meitheal.shared.view.EngagementView;
 import ie.ucd.meitheal.shared.view.MemberView;
 import ie.ucd.meitheal.shared.view.ProposalView;
+import ie.ucd.meitheal.shared.view.ReportView;
 import ie.ucd.meitheal.shared.view.RequestView;
+import ie.ucd.meitheal.shared.view.TransactionView;
 import java.io.IOException;
 import java.io.Reader;
 import java.io.Writer;
@@ -86,9 +91,10 @@ public final class RegistrationConsole {
             }
             case "7" -> confirmEngagement();
             case "8" -> cancelEngagement();
-            case "10" -> unavailable(choice, true);
+            case "10" -> communityGrant();
             case "9" -> suspendOrReinstate();
-            case "12", "13" -> unavailable(choice, false);
+            case "12" -> showReport();
+            case "13" -> unavailable(choice, false);
             default -> line("Choose one of the listed options.");
         }
     }
@@ -472,15 +478,123 @@ public final class RegistrationConsole {
     private void balanceMenu() throws IOException {
         clear();
         while (running) {
-            line("1 Balance\n2 Ledger history (unavailable)\n3 Engagement history (unavailable)\n0 Back");
+            boolean hasHistory = service instanceof CommunityFinanceService;
+            line(hasHistory ? "1 Balance\n2 Ledger history\n3 Engagement history\n0 Back"
+                    : "1 Balance\n2 Ledger history (unavailable)\n3 Engagement history (unavailable)\n0 Back");
             String choice = readLine("> ");
             if (choice == null || choice.trim().equals("0")) return;
             switch (choice.trim()) {
                 case "1" -> showBalance();
-                case "2", "3" -> unavailable(choice, false);
+                case "2" -> showLedgerHistory();
+                case "3" -> showEngagementHistory();
                 default -> line("Choose 1, 2, 3 or 0.");
             }
         }
+    }
+
+    private void communityGrant() throws IOException {
+        if (!requireMember("apply for a community grant")) return;
+        if (!(service instanceof CommunityFinanceService finance)) {
+            unavailable("10", false);
+            return;
+        }
+        clear();
+        while (running) {
+            String rawAmount = readLine("Grant amount in credits (or 0 Back): ");
+            if (rawAmount == null || rawAmount.trim().equals("0")) return;
+            long amount;
+            try {
+                amount = Long.parseLong(rawAmount.trim());
+            } catch (NumberFormatException ignored) {
+                line("Enter a positive whole number of credits, or 0 Back.");
+                continue;
+            }
+            if (amount < 0) {
+                line("Enter a positive whole number of credits, or 0 Back.");
+                continue;
+            }
+            if (amount == 0) return;
+            Result<CommunityGrantView> result = finance.applyForCommunityGrant(selected.id(), amount);
+            if (result.isFailure()) {
+                failure(result);
+                return;
+            }
+            CommunityGrantView grant = result.value().orElseThrow();
+            line("Community grant approved: " + grant.amount() + " credits on " + grant.approvedOn() + ".");
+            pauseForBack();
+            return;
+        }
+    }
+
+    private void showLedgerHistory() throws IOException {
+        if (!(service instanceof CommunityFinanceService finance)) {
+            unavailable("11", false);
+            return;
+        }
+        clear();
+        Result<List<TransactionView>> result = finance.memberLedgerHistory(selected.id());
+        if (result.isFailure()) {
+            failure(result);
+            return;
+        }
+        List<TransactionView> transactions = result.value().orElseThrow();
+        if (transactions.isEmpty()) {
+            line("No ledger transactions found.");
+        } else {
+            line("Ledger history for " + selected.id().value());
+            for (TransactionView transaction : transactions) {
+                line(transaction.date() + " | " + transaction.type() + " | " + transaction.amount()
+                        + " credits | " + accountLabel(transaction.from()) + " -> " + accountLabel(transaction.to())
+                        + " | Transaction " + transaction.id().value()
+                        + (transaction.engagementId() == null ? "" : " | Engagement " + transaction.engagementId().value()));
+            }
+        }
+        pauseForBack();
+    }
+
+    private String accountLabel(AccountReferenceView account) {
+        if (account.memberId() == null) return account.type().name();
+        return "MEMBER " + account.memberId().value();
+    }
+
+    private void showEngagementHistory() throws IOException {
+        if (!(service instanceof CommunityFinanceService finance)) {
+            unavailable("11", false);
+            return;
+        }
+        clear();
+        Result<List<EngagementView>> result = finance.ownEngagementHistory(selected.id());
+        if (result.isFailure()) {
+            failure(result);
+            return;
+        }
+        List<EngagementView> engagements = result.value().orElseThrow();
+        if (engagements.isEmpty()) {
+            line("No engagement history found.");
+        } else {
+            line("Engagement history for " + selected.id().value());
+            for (EngagementView engagement : engagements) {
+                String role = selected.id().equals(engagement.requesterId()) ? "Requester" : "Helper";
+                line(engagement.scheduledDate() + " | " + engagement.status() + " | " + role
+                        + " | Request " + engagement.requestId().value() + " | Helper "
+                        + engagement.helperId().value() + " | Requester " + engagement.requesterId().value()
+                        + " | " + engagement.durationMinutes() + " minutes | Engagement " + engagement.id().value());
+            }
+        }
+        pauseForBack();
+    }
+
+    private void showReport() throws IOException {
+        if (!(service instanceof CommunityFinanceService finance)) {
+            unavailable("12", false);
+            return;
+        }
+        clear();
+        ReportView report = finance.report();
+        line("Community report\nMembers: " + report.memberCount() + "\nTotal member balances: "
+                + report.memberBalanceTotal() + " credits\nCommunity fund: " + report.fundBalance()
+                + " credits\nCombined total: " + report.actualCirculation() + " credits");
+        pauseForBack();
     }
 
     private void showBalance() throws IOException {
