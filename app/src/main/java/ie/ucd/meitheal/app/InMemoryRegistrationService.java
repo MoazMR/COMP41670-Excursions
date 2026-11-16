@@ -22,8 +22,11 @@ import ie.ucd.meitheal.shared.port.SimulatedClock;
 import ie.ucd.meitheal.shared.result.FailureCode;
 import ie.ucd.meitheal.shared.result.Result;
 import ie.ucd.meitheal.shared.view.BalanceView;
+import ie.ucd.meitheal.shared.view.CommunityGrantView;
 import ie.ucd.meitheal.shared.view.MemberView;
 import ie.ucd.meitheal.shared.view.EngagementView;
+import ie.ucd.meitheal.shared.view.ReportView;
+import ie.ucd.meitheal.shared.view.TransactionView;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Objects;
@@ -33,7 +36,7 @@ import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 /** In-memory implementation of registration backed by the membership and ledger owners. */
-public final class InMemoryRegistrationService implements SuspensionService {
+public final class InMemoryRegistrationService implements CommunityFinanceService {
     private final Object lock;
     private final MemberManager members;
     private final LedgerManager ledger;
@@ -216,6 +219,43 @@ public final class InMemoryRegistrationService implements SuspensionService {
                 return Result.failure(FailureCode.MEMBER_NOT_FOUND, "Member does not exist");
             }
             return Result.success(ledger.balanceView(memberId));
+        }
+    }
+
+    @Override
+    public Result<CommunityGrantView> applyForCommunityGrant(MemberId memberId, long amount) {
+        synchronized (lock) {
+            if (memberId == null || members.findById(memberId).isEmpty()) {
+                return Result.failure(FailureCode.MEMBER_NOT_FOUND, "Member does not exist");
+            }
+            return ledger.applyForCommunityGrant(memberId, amount);
+        }
+    }
+
+    @Override
+    public Result<List<TransactionView>> memberLedgerHistory(MemberId memberId) {
+        synchronized (lock) {
+            if (memberId == null || members.findById(memberId).isEmpty()) {
+                return Result.failure(FailureCode.MEMBER_NOT_FOUND, "Member does not exist");
+            }
+            return Result.success(ledger.memberLedgerHistory(memberId));
+        }
+    }
+
+    @Override
+    public Result<List<EngagementView>> ownEngagementHistory(MemberId memberId) {
+        synchronized (lock) {
+            if (memberId == null || members.findById(memberId).isEmpty()) {
+                return Result.failure(FailureCode.MEMBER_NOT_FOUND, "Member does not exist");
+            }
+            return engagements.engagementsForMember(memberId);
+        }
+    }
+
+    @Override
+    public ReportView report() {
+        synchronized (lock) {
+            return ledger.report();
         }
     }
 

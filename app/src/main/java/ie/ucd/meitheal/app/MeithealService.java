@@ -7,13 +7,10 @@ import ie.ucd.meitheal.shared.id.ProposalId;
 import ie.ucd.meitheal.shared.id.RequestId;
 import ie.ucd.meitheal.shared.result.Result;
 import ie.ucd.meitheal.shared.view.CategoryView;
-import ie.ucd.meitheal.shared.view.CommunityGrantView;
 import ie.ucd.meitheal.shared.view.EngagementView;
 import ie.ucd.meitheal.shared.view.MemberView;
 import ie.ucd.meitheal.shared.view.ProposalView;
-import ie.ucd.meitheal.shared.view.ReportView;
 import ie.ucd.meitheal.shared.view.RequestView;
-import ie.ucd.meitheal.shared.view.TransactionView;
 import java.time.LocalDate;
 import java.util.List;
 
@@ -25,7 +22,7 @@ import java.util.List;
  * Cross-owner operations preserve all affected observable state on rejection or an uncommitted
  * technical failure; the latter is reported as ATOMIC_OPERATION_FAILED and may be retried.
  */
-public interface MeithealService extends SuspensionService {
+public interface MeithealService extends CommunityFinanceService {
 
     /**
      * Unknown members fail with MEMBER_NOT_FOUND; repeating the current status is rejected.
@@ -71,20 +68,6 @@ public interface MeithealService extends SuspensionService {
      * INVALID_STATE, and a closed cancellation date fails with CANCELLATION_CLOSED.
      */
     Result<EngagementView> cancelEngagement(MemberId participantId, EngagementId engagementId);
-
-    /**
-     * A grant exceeding available community fund credits fails with
-     * INSUFFICIENT_COMMUNITY_FUND_CREDITS.
-     */
-    Result<CommunityGrantView> applyForCommunityGrant(MemberId memberId, long amount);
-
-    /** Returns immutable ledger history for a member. */
-    Result<List<TransactionView>> memberLedgerHistory(MemberId memberId);
-
-    /** Returns immutable engagement history visible to the specified participant. */
-    Result<List<EngagementView>> ownEngagementHistory(MemberId memberId);
-
-    ReportView report();
 
     LocalDate currentDate();
 
