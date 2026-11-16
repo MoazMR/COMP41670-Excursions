@@ -1,6 +1,8 @@
 package ie.ucd.meitheal.ledger;
 
 import ie.ucd.meitheal.shared.id.MemberId;
+import ie.ucd.meitheal.shared.view.AccountReferenceView;
+import ie.ucd.meitheal.shared.view.AccountReferenceView.AccountType;
 
 import java.util.Objects;
 
@@ -39,6 +41,17 @@ public final class AccountReference {
 
     public boolean isFund() {
         return fund;
+    }
+
+    boolean isMember() {
+        return memberId != null;
+    }
+
+    AccountReferenceView toView() {
+        if (isMember()) {
+            return new AccountReferenceView(AccountType.MEMBER, memberId);
+        }
+        return new AccountReferenceView(isFund() ? AccountType.FUND : AccountType.SYSTEM, null);
     }
 
     public MemberId memberId() {

@@ -2,6 +2,7 @@ package ie.ucd.meitheal.ledger;
 
 import ie.ucd.meitheal.shared.id.TransactionId;
 import ie.ucd.meitheal.shared.id.EngagementId;
+import ie.ucd.meitheal.shared.view.TransactionView;
 
 import java.time.LocalDate;
 import java.util.Objects;
@@ -39,6 +40,11 @@ public record Transaction(
                 != (engagementId != null)) {
             throw new IllegalArgumentException("settlement entries require an engagement ID");
         }
+    }
+
+    TransactionView toView() {
+        return new TransactionView(transactionId, type.toSharedType(), debtor.toView(), creditor.toView(),
+                amount, date, engagementId);
     }
 
     public TransactionId id() {
