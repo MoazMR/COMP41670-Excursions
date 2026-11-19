@@ -3,6 +3,7 @@ package ie.ucd.meitheal.cli;
 import ie.ucd.meitheal.app.ConfirmationService;
 import ie.ucd.meitheal.app.CancellationService;
 import ie.ucd.meitheal.app.CommunityFinanceService;
+import ie.ucd.meitheal.app.ProposalManagementService;
 import ie.ucd.meitheal.app.RegistrationService;
 import ie.ucd.meitheal.app.RequestService;
 import ie.ucd.meitheal.app.SelectionService;
@@ -405,24 +406,33 @@ public final class RegistrationConsole {
     private void findMatches(RequestService requests) throws IOException {
         while (running) {
             Result<List<RequestView>> result = requests.matchingRequests(selected.id());
-            if (result.isFailure()) {
+            if (result.isFailure() && !(requests instanceof ProposalManagementService)) {
                 failure(result);
                 return;
             }
-            List<RequestView> matches = result.value().orElseThrow();
-            if (matches.isEmpty()) {
+            List<RequestView> matches = result.value().orElse(List.of());
+            if (result.isFailure()) {
+                writeFailure(result);
+            } else if (matches.isEmpty()) {
                 line("No matching requests.");
-                pauseForBack();
-                return;
+            } else {
+                line("Matching requests");
             }
-            line("Matching requests");
             for (int index = 0; index < matches.size(); index++) {
                 RequestView request = matches.get(index);
                 line((index + 1) + " Request " + request.id().value() + " | " + request.categoryId().value()
                         + " | " + request.durationMinutes() + " minutes | " + request.windowStart()
                         + " to " + request.windowEnd());
             }
-            RequestView match = choose(matches, "Request number to propose for: ");
+            RequestView match;
+            if (requests instanceof ProposalManagementService proposals) {
+                match = chooseMatchOrManage(matches, proposals);
+            } else if (matches.isEmpty()) {
+                pauseForBack();
+                return;
+            } else {
+                match = choose(matches, "Request number to propose for: ");
+            }
             if (match == null) return;
             clear();
             line("Request " + match.id().value() + " | " + match.windowStart() + " to " + match.windowEnd());
@@ -439,6 +449,74 @@ public final class RegistrationConsole {
             }
             clear();
         }
+    }
+
+    private RequestView chooseMatchOrManage(List<RequestView> matches, ProposalManagementService service)
+            throws IOException {
+        line("H  View or withdraw my proposals\nR  Inspect or reject proposals for my request\n0 Back");
+        while (running) {
+            String input = readLine(matches.isEmpty() ? "> " : "Request number to propose for: ");
+            if (input == null || input.trim().equals("0")) return null;
+            String choice = input.strip();
+            if (choice.equalsIgnoreCase("H")) {
+                manageProposals(service, null);
+                return null;
+            }
+            if (choice.equalsIgnoreCase("R")) {
+                while (running) {
+                    String id = readLine("Request ID (or 0 Back): ");
+                    if (id == null || id.strip().equals("0")) return null;
+                    if (!id.isBlank()) {
+                        manageProposals(service, new RequestId(id.strip()));
+                        return null;
+                    }
+                    line("Enter a request ID, or 0 Back.");
+                }
+                return null;
+            }
+            try {
+                int number = Integer.parseInt(choice);
+                if (number >= 1 && number <= matches.size()) return matches.get(number - 1);
+            } catch (NumberFormatException ignored) {
+                // Repeat the choices when the input is neither a command nor a listed request.
+            }
+            line(matches.isEmpty() ? "Choose H, R or 0 Back."
+                    : "Enter a whole number from 1 to " + matches.size() + ", H, R or 0 Back.");
+        }
+        return null;
+    }
+
+    private void manageProposals(ProposalManagementService service, RequestId request) throws IOException {
+        boolean own = request == null;
+        Result<List<ProposalView>> result = own ? service.proposalsForHelper(selected.id())
+                : service.proposalsForRequest(selected.id(), request);
+        if (result.isFailure()) {
+            failure(result);
+            return;
+        }
+        List<ProposalView> proposals = result.value().orElseThrow();
+        if (proposals.isEmpty()) {
+            line(own ? "You have no proposals." : "No proposals found for this request.");
+            pauseForBack();
+            return;
+        }
+        line(own ? "My proposals" : "Proposals for request " + request.value());
+        for (int i = 0; i < proposals.size(); i++) {
+            ProposalView item = proposals.get(i);
+            line((i + 1) + " Proposal " + item.id().value() + " | Request " + item.requestId().value()
+                    + " | Helper " + item.helperId().value() + " | " + item.proposedOn() + " | " + item.status());
+        }
+        ProposalView proposal = choose(proposals, own ? "Proposal number to withdraw: " : "Proposal number to reject: ");
+        if (proposal == null) return;
+        Result<ProposalView> change = own ? service.withdrawProposal(selected.id(), proposal.id())
+                : service.rejectProposal(selected.id(), proposal.id());
+        if (change.isFailure()) {
+            failure(change);
+            return;
+        }
+        ProposalView updated = change.value().orElseThrow();
+        line("Proposal " + updated.id().value() + " | " + updated.status());
+        pauseForBack();
     }
 
     private <T> T choose(List<T> choices, String prompt) throws IOException {
