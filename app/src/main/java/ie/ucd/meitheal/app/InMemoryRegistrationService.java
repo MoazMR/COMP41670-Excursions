@@ -36,7 +36,7 @@ import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 /** In-memory implementation of registration backed by the membership and ledger owners. */
-public final class InMemoryRegistrationService implements CommunityFinanceService {
+public final class InMemoryRegistrationService implements ProposalManagementService, CommunityFinanceService {
     private final Object lock;
     private final MemberManager members;
     private final LedgerManager ledger;
@@ -308,6 +308,21 @@ public final class InMemoryRegistrationService implements CommunityFinanceServic
         synchronized (lock) {
             return engagements.proposalsForRequest(requesterId, requestId);
         }
+    }
+
+    @Override
+    public Result<List<ProposalView>> proposalsForHelper(MemberId helperId) {
+        return engagements.proposalsForHelper(helperId);
+    }
+
+    @Override
+    public Result<ProposalView> withdrawProposal(MemberId helperId, ProposalId proposalId) {
+        return engagements.withdrawProposal(helperId, proposalId);
+    }
+
+    @Override
+    public Result<ProposalView> rejectProposal(MemberId requesterId, ProposalId proposalId) {
+        return engagements.rejectProposal(requesterId, proposalId);
     }
 
     @Override
