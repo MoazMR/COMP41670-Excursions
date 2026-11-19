@@ -171,6 +171,111 @@ class ProposalSelectionTest {
             fixture.manager.findProposal(OWNER_R2, PROPOSAL_R2_HELPER).value().orElseThrow().status());
     }
 
+    @Test
+    void helperAndRequesterSeeOnlyTheirProposalsAndCanCloseThemIndependently() {
+        Fixture fixture = new Fixture();
+        fixture.seed();
+        EngagementManager manager = fixture.manager;
+        List<ProposalView> helperHistory = manager.proposalsForHelper(HELPER).value().orElseThrow();
+        assertEquals(List.of(PROPOSAL_R1_HELPER, PROPOSAL_R2_HELPER),
+            helperHistory.stream().map(ProposalView::id).toList());
+        assertThrows(UnsupportedOperationException.class, helperHistory::clear);
+        assertEquals(List.of(), manager.proposalsForHelper(STRANGER).value().orElseThrow());
+        assertFailure(FailureCode.NOT_PARTICIPANT, manager.proposalsForRequest(HELPER, REQUEST_R1));
+
+        ProposalView withdrawn = manager.withdrawProposal(HELPER, PROPOSAL_R1_HELPER).value().orElseThrow();
+        ProposalView rejected = manager.rejectProposal(OWNER_R1, PROPOSAL_R1_OTHER).value().orElseThrow();
+        assertEquals(ProposalStatus.WITHDRAWN, withdrawn.status());
+        assertEquals(ProposalStatus.REJECTED, rejected.status());
+        assertEquals(List.of(withdrawn, rejected), manager.proposalsForRequest(OWNER_R1, REQUEST_R1).value().orElseThrow());
+        assertEquals(List.of(withdrawn, helperHistory.get(1)), manager.proposalsForHelper(HELPER).value().orElseThrow());
+        assertEquals(ProposalStatus.PENDING, helperHistory.get(0).status());
+        assertEquals(RequestStatus.OPEN, manager.findRequest(REQUEST_R1).value().orElseThrow().status());
+
+        ProposalId fresh = new ProposalId("fresh");
+        assertTrue(manager.submitProposal(HELPER, REQUEST_R1, fresh, TODAY).isSuccess());
+        assertTrue(manager.withSelection(OWNER_R1, fresh, ENGAGEMENT_ONE, Result::success).isSuccess());
+        assertEquals(List.of(withdrawn, rejected, manager.findProposal(OWNER_R1, fresh).value().orElseThrow()),
+            manager.proposalsForRequest(OWNER_R1, REQUEST_R1).value().orElseThrow());
+    }
+
+    @Test
+    void wrongRoleMissingRecordsAndMalformedActionsPreserveState() {
+        Fixture fixture = new Fixture();
+        fixture.seed();
+        EngagementManager manager = fixture.manager;
+        ProposalState before = state(manager);
+        for (MemberId wrongHelper : List.of(OWNER_R1, STRANGER)) {
+            assertFailure(FailureCode.NOT_PARTICIPANT, manager.withdrawProposal(wrongHelper, PROPOSAL_R1_HELPER));
+            assertEquals(before, state(manager));
+        }
+        for (MemberId wrongRequester : List.of(HELPER, STRANGER)) {
+            assertFailure(FailureCode.NOT_PARTICIPANT, manager.rejectProposal(wrongRequester, PROPOSAL_R1_HELPER));
+            assertEquals(before, state(manager));
+        }
+        MemberId absent = new MemberId("absent");
+        ProposalId missing = new ProposalId("missing");
+        assertFailure(FailureCode.MEMBER_NOT_FOUND, manager.proposalsForHelper(absent));
+        assertFailure(FailureCode.MALFORMED_INPUT, manager.proposalsForHelper(null));
+        assertFailure(FailureCode.MEMBER_NOT_FOUND, manager.withdrawProposal(absent, PROPOSAL_R1_HELPER));
+        assertFailure(FailureCode.MEMBER_NOT_FOUND, manager.rejectProposal(absent, PROPOSAL_R1_HELPER));
+        assertFailure(FailureCode.PROPOSAL_NOT_FOUND, manager.withdrawProposal(HELPER, missing));
+        assertFailure(FailureCode.PROPOSAL_NOT_FOUND, manager.rejectProposal(OWNER_R1, missing));
+        assertFailure(FailureCode.MALFORMED_INPUT, manager.withdrawProposal(null, PROPOSAL_R1_HELPER));
+        assertFailure(FailureCode.MALFORMED_INPUT, manager.rejectProposal(OWNER_R1, null));
+        assertEquals(before, state(manager));
+    }
+
+    @Test
+    void bothActionsRefuseEveryTerminalProposalAndPreserveSnapshots() {
+        for (ProposalStatus status : List.of(ProposalStatus.SELECTED, ProposalStatus.REJECTED,
+                ProposalStatus.WITHDRAWN, ProposalStatus.INVALIDATED)) {
+            Fixture fixture = new Fixture();
+            fixture.seed();
+            EngagementManager manager = fixture.manager;
+            switch (status) {
+                case SELECTED -> manager.withSelection(OWNER_R1, PROPOSAL_R1_HELPER, ENGAGEMENT_ONE, Result::success);
+                case REJECTED -> manager.rejectProposal(OWNER_R1, PROPOSAL_R1_HELPER);
+                case WITHDRAWN -> manager.withdrawProposal(HELPER, PROPOSAL_R1_HELPER);
+                case INVALIDATED -> manager.withProposalCleanup(HELPER, () -> Result.success("ready"));
+                default -> throw new AssertionError(status);
+            }
+            assertEquals(status, manager.findProposal(OWNER_R1, PROPOSAL_R1_HELPER).value().orElseThrow().status());
+            ProposalState before = state(manager);
+            assertFailure(FailureCode.INVALID_STATE, manager.withdrawProposal(HELPER, PROPOSAL_R1_HELPER));
+            assertEquals(before, state(manager));
+            assertFailure(FailureCode.INVALID_STATE, manager.rejectProposal(OWNER_R1, PROPOSAL_R1_HELPER));
+            assertEquals(before, state(manager));
+        }
+    }
+
+    @Test
+    void nestedProposalChangesAreRejectedWhileSelectionAwaitsPublication() {
+        Fixture fixture = new Fixture();
+        fixture.seed();
+        EngagementManager manager = fixture.manager;
+        ProposalState before = state(manager);
+        Result<String> refused = manager.withSelection(OWNER_R1, PROPOSAL_R1_HELPER, ENGAGEMENT_ONE, engagement -> {
+            assertFailure(FailureCode.INVALID_STATE, manager.withdrawProposal(HELPER, PROPOSAL_R2_HELPER));
+            assertFailure(FailureCode.INVALID_STATE, manager.rejectProposal(OWNER_R2, PROPOSAL_R2_HELPER));
+            assertEquals(before, state(manager));
+            return Result.failure(FailureCode.ATOMIC_OPERATION_FAILED, "hold refused");
+        });
+        assertFailure(FailureCode.ATOMIC_OPERATION_FAILED, refused);
+        assertEquals(before, state(manager));
+    }
+
+    private record ProposalState(RequestView first, RequestView second, List<ProposalView> firstProposals,
+            List<ProposalView> secondProposals, List<EngagementView> engagements) {}
+
+    private static ProposalState state(EngagementManager manager) {
+        return new ProposalState(manager.findRequest(REQUEST_R1).value().orElseThrow(),
+            manager.findRequest(REQUEST_R2).value().orElseThrow(),
+            manager.proposalsForRequest(OWNER_R1, REQUEST_R1).value().orElseThrow(),
+            manager.proposalsForRequest(OWNER_R2, REQUEST_R2).value().orElseThrow(),
+            manager.engagementsForMember(HELPER).value().orElseThrow());
+    }
+
     private static void assertSelectionStateUntouched(Fixture fixture) {
         assertEquals(RequestStatus.OPEN, fixture.manager.findRequest(REQUEST_R1).value().orElseThrow().status());
         assertEquals(ProposalStatus.PENDING,

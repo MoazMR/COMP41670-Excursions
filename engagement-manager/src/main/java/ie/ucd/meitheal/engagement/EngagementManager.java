@@ -228,23 +228,75 @@ public final class EngagementManager {
 
     public Result<ProposalView> findProposal(MemberId requesterId, ProposalId proposalId) {
         synchronized (commonLock) {
-            if (requesterId == null || proposalId == null) {
-                return Result.failure(FailureCode.MALFORMED_INPUT, "Requester and proposal IDs are required");
-            }
-            if (findMember.apply(requesterId).isEmpty()) {
-                return Result.failure(FailureCode.MEMBER_NOT_FOUND, "Requester not found");
-            }
-            ProposalView proposal = proposalsById.get(proposalId);
-            if (proposal == null) {
-                return Result.failure(FailureCode.PROPOSAL_NOT_FOUND, "Proposal not found");
-            }
-            RequestView request = requestsById.get(proposal.requestId());
-            if (request == null || !request.requesterId().equals(requesterId)) {
-                return Result.failure(FailureCode.NOT_PARTICIPANT,
-                    "Requester does not own the proposal's request");
-            }
-            return Result.success(proposal);
+            return findOwnedProposal(requesterId, proposalId, false);
         }
+    }
+
+    public Result<List<ProposalView>> proposalsForHelper(MemberId helperId) {
+        synchronized (commonLock) {
+            if (helperId == null) {
+                return Result.failure(FailureCode.MALFORMED_INPUT, "Helper ID is required");
+            }
+            if (findMember.apply(helperId).isEmpty()) {
+                return Result.failure(FailureCode.MEMBER_NOT_FOUND, "Helper not found");
+            }
+            return Result.success(proposalsById.values().stream()
+                .filter(proposal -> proposal.helperId().equals(helperId))
+                .toList());
+        }
+    }
+
+    public Result<ProposalView> withdrawProposal(MemberId helperId, ProposalId proposalId) {
+        return closePendingProposal(helperId, proposalId, ProposalStatus.WITHDRAWN);
+    }
+
+    public Result<ProposalView> rejectProposal(MemberId requesterId, ProposalId proposalId) {
+        return closePendingProposal(requesterId, proposalId, ProposalStatus.REJECTED);
+    }
+
+    private Result<ProposalView> closePendingProposal(MemberId actorId, ProposalId proposalId, ProposalStatus status) {
+        synchronized (commonLock) {
+            if (ownerCallbackActive) {
+                return callbackMutationFailure();
+            }
+            Result<ProposalView> owned = findOwnedProposal(actorId, proposalId, status == ProposalStatus.WITHDRAWN);
+            if (owned.isFailure()) {
+                return owned;
+            }
+            ProposalView proposal = owned.value().orElseThrow();
+            if (proposal.status() != ProposalStatus.PENDING) {
+                return Result.failure(FailureCode.INVALID_STATE, "Proposal is no longer pending");
+            }
+            ProposalView updated = new ProposalView(proposal.id(), proposal.requestId(), proposal.helperId(),
+                proposal.proposedOn(), status);
+            proposalsById.put(proposalId, updated);
+            return Result.success(updated);
+        }
+    }
+
+    private Result<ProposalView> findOwnedProposal(MemberId actorId, ProposalId proposalId, boolean asHelper) {
+        if (actorId == null || proposalId == null) {
+            return Result.failure(FailureCode.MALFORMED_INPUT,
+                asHelper ? "Helper and proposal IDs are required" : "Requester and proposal IDs are required");
+        }
+        if (findMember.apply(actorId).isEmpty()) {
+            return Result.failure(FailureCode.MEMBER_NOT_FOUND, asHelper ? "Helper not found" : "Requester not found");
+        }
+        ProposalView proposal = proposalsById.get(proposalId);
+        if (proposal == null) {
+            return Result.failure(FailureCode.PROPOSAL_NOT_FOUND, "Proposal not found");
+        }
+        if (asHelper) {
+            if (!proposal.helperId().equals(actorId)) {
+                return Result.failure(FailureCode.NOT_PARTICIPANT, "Helper does not own the proposal");
+            }
+        } else {
+            RequestView request = requestsById.get(proposal.requestId());
+            if (request == null || !request.requesterId().equals(actorId)) {
+                return Result.failure(FailureCode.NOT_PARTICIPANT, "Requester does not own the proposal's request");
+            }
+        }
+        return Result.success(proposal);
     }
 
     public <T> Result<T> withSelection(MemberId requesterId, ProposalId proposalId, EngagementId engagementId,
