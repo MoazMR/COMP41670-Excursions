@@ -9,10 +9,8 @@ import ie.ucd.meitheal.shared.result.Result;
 import ie.ucd.meitheal.shared.view.CategoryView;
 import ie.ucd.meitheal.shared.view.EngagementView;
 import ie.ucd.meitheal.shared.view.MemberView;
-import ie.ucd.meitheal.shared.view.ProposalView;
 import ie.ucd.meitheal.shared.view.RequestView;
 import java.time.LocalDate;
-import java.util.List;
 
 /**
  * Public caller boundary for membership, requests, engagements, and the community ledger.
@@ -22,7 +20,7 @@ import java.util.List;
  * Cross-owner operations preserve all affected observable state on rejection or an uncommitted
  * technical failure; the latter is reported as ATOMIC_OPERATION_FAILED and may be retried.
  */
-public interface MeithealService extends CommunityFinanceService {
+public interface MeithealService extends ProposalManagementService, CommunityFinanceService {
 
     /**
      * Unknown members fail with MEMBER_NOT_FOUND; repeating the current status is rejected.
@@ -41,15 +39,6 @@ public interface MeithealService extends CommunityFinanceService {
     Result<CategoryView> findCategory(CategoryId categoryId);
 
     Result<RequestView> findRequest(RequestId requestId);
-
-    Result<List<ProposalView>> proposalsForRequest(MemberId requesterId, RequestId requestId);
-
-    /** Returns an immutable snapshot of proposals owned by the helper. */
-    Result<List<ProposalView>> proposalsForHelper(MemberId helperId);
-
-    Result<ProposalView> rejectProposal(MemberId requesterId, ProposalId proposalId);
-
-    Result<ProposalView> withdrawProposal(MemberId helperId, ProposalId proposalId);
 
     /**
      * Either suspended participant fails with SUSPENDED_MEMBER; a hold below the -180
