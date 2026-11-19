@@ -7,6 +7,7 @@ import ie.ucd.meitheal.app.RegistrationService;
 import ie.ucd.meitheal.app.RequestService;
 import ie.ucd.meitheal.app.SelectionService;
 import ie.ucd.meitheal.app.SuspensionService;
+import ie.ucd.meitheal.app.SimulatedDateService;
 import ie.ucd.meitheal.shared.id.EngagementId;
 import ie.ucd.meitheal.shared.id.MemberId;
 import ie.ucd.meitheal.shared.id.RequestId;
@@ -94,7 +95,7 @@ public final class RegistrationConsole {
             case "10" -> communityGrant();
             case "9" -> suspendOrReinstate();
             case "12" -> showReport();
-            case "13" -> unavailable(choice, false);
+            case "13" -> simulatedDateMenu();
             default -> line("Choose one of the listed options.");
         }
     }
@@ -582,6 +583,33 @@ public final class RegistrationConsole {
             }
         }
         pauseForBack();
+    }
+
+    private void simulatedDateMenu() throws IOException {
+        if (!(service instanceof SimulatedDateService dates)) {
+            unavailable("13", false);
+            return;
+        }
+        clear();
+        while (running) {
+            line("Current simulated date: " + dates.currentDate());
+            line("1 Advance date\n0 Back");
+            String choice = readLine("> ");
+            if (choice == null || choice.trim().equals("0")) return;
+            if (!choice.trim().equals("1")) {
+                line("Choose 1 or 0.");
+                continue;
+            }
+            LocalDate date = readDate("New date (YYYY-MM-DD, or 0 Back): ");
+            if (date == null) continue;
+            Result<LocalDate> result = dates.advanceDate(date);
+            if (result.isFailure()) {
+                failure(result);
+            } else {
+                line("Simulated date set to " + result.value().orElseThrow() + ".");
+                pauseForBack();
+            }
+        }
     }
 
     private void showReport() throws IOException {
