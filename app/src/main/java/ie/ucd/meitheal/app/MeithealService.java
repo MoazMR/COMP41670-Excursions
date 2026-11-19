@@ -10,7 +10,6 @@ import ie.ucd.meitheal.shared.view.CategoryView;
 import ie.ucd.meitheal.shared.view.EngagementView;
 import ie.ucd.meitheal.shared.view.MemberView;
 import ie.ucd.meitheal.shared.view.RequestView;
-import java.time.LocalDate;
 
 /**
  * Public caller boundary for membership, requests, engagements, and the community ledger.
@@ -20,7 +19,7 @@ import java.time.LocalDate;
  * Cross-owner operations preserve all affected observable state on rejection or an uncommitted
  * technical failure; the latter is reported as ATOMIC_OPERATION_FAILED and may be retried.
  */
-public interface MeithealService extends ProposalManagementService, CommunityFinanceService {
+public interface MeithealService extends ProposalManagementService, CommunityFinanceService, SimulatedDateService {
 
     /**
      * Unknown members fail with MEMBER_NOT_FOUND; repeating the current status is rejected.
@@ -57,12 +56,4 @@ public interface MeithealService extends ProposalManagementService, CommunityFin
      * INVALID_STATE, and a closed cancellation date fails with CANCELLATION_CLOSED.
      */
     Result<EngagementView> cancelEngagement(MemberId participantId, EngagementId engagementId);
-
-    LocalDate currentDate();
-
-    /**
-     * Changing the simulated date performs no business action. Same-day advance succeeds unchanged;
-     * backward advance fails without changing the date.
-     */
-    Result<LocalDate> advanceDate(LocalDate date);
 }

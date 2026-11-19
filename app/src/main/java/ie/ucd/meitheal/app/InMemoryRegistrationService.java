@@ -36,8 +36,9 @@ import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 /** In-memory implementation of registration backed by the membership and ledger owners. */
-public final class InMemoryRegistrationService implements ProposalManagementService, CommunityFinanceService {
+public final class InMemoryRegistrationService implements ProposalManagementService, CommunityFinanceService, SimulatedDateService {
     private final Object lock;
+    private final SimulatedClock clock;
     private final MemberManager members;
     private final LedgerManager ledger;
     private final RegistrationCoordinator coordinator;
@@ -103,6 +104,7 @@ public final class InMemoryRegistrationService implements ProposalManagementServ
             Consumer<EngagementView> beforeConfirmationPublication,
             Consumer<EngagementView> beforeCancellationPublication, Runnable beforeSuspensionPublication) {
         this.lock = Objects.requireNonNull(lock, "lock");
+        this.clock = Objects.requireNonNull(clock, "clock");
         this.members = Objects.requireNonNull(members, "members");
         this.ledger = Objects.requireNonNull(ledger, "ledger");
         this.catalogue = Objects.requireNonNull(catalogue);
@@ -141,6 +143,20 @@ public final class InMemoryRegistrationService implements ProposalManagementServ
                 });
         this.coordinator = new RegistrationCoordinator(this.lock, clock,
                 Objects.requireNonNull(transactionIds, "transactionIds"), membership, welcomeGrant);
+    }
+
+    @Override
+    public LocalDate currentDate() {
+        synchronized (lock) {
+            return clock.currentDate();
+        }
+    }
+
+    @Override
+    public Result<LocalDate> advanceDate(LocalDate date) {
+        synchronized (lock) {
+            return clock.advanceTo(date);
+        }
     }
 
     @Override
