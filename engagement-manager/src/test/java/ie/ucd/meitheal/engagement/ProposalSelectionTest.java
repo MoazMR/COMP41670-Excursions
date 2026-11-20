@@ -49,6 +49,23 @@ class ProposalSelectionTest {
     private static final LocalDate TODAY = LocalDate.of(2026, 5, 4);
 
     @Test
+    void sessionLimitAppliesPerEngagementEvenOnTheSameDate() {
+        Fixture fixture = new Fixture();
+        fixture.seed(300);
+        var first = fixture.manager.withSelection(OWNER_R1, PROPOSAL_R1_HELPER, ENGAGEMENT_ONE,
+            Result::success).value().orElseThrow();
+        var second = fixture.manager.withSelection(OWNER_R2, PROPOSAL_R2_HELPER, new EngagementId("e2"),
+            Result::success).value().orElseThrow();
+        assertEquals(TODAY.plusDays(1), first.scheduledDate());
+        assertEquals(first.scheduledDate(), second.scheduledDate());
+        assertEquals(300, first.durationMinutes());
+        assertEquals(300, second.durationMinutes());
+        assertEquals(EngagementStatus.AGREED, first.status());
+        assertEquals(EngagementStatus.AGREED, second.status());
+        assertEquals(List.of(first, second), fixture.manager.engagementsForMember(HELPER).value().orElseThrow());
+    }
+
+    @Test
     void publishesSelectionAndPreservesOtherRequestAndLimitsHistoryToActors() {
         Fixture fixture = new Fixture();
         fixture.seed();
@@ -298,19 +315,23 @@ class ProposalSelectionTest {
             new Members(), new Catalog(), new Clock(), sharedMonitor);
 
         private void seed() {
+            seed(30);
+        }
+
+        private void seed(int minutes) {
             for (MemberId member : List.of(OWNER_R1, HELPER, OWNER_R2, STRANGER)) {
                 status.put(member, MemberStatus.ACTIVE);
                 skills.put(member, new HashSet<>(Set.of(GARDENING)));
             }
-            createRequest(REQUEST_R1, OWNER_R1);
-            createRequest(REQUEST_R2, OWNER_R2);
+            createRequest(REQUEST_R1, OWNER_R1, minutes);
+            createRequest(REQUEST_R2, OWNER_R2, minutes);
             assertSuccess(manager.submitProposal(HELPER, REQUEST_R1, PROPOSAL_R1_HELPER, TODAY.plusDays(1)));
             assertSuccess(manager.submitProposal(OWNER_R2, REQUEST_R1, PROPOSAL_R1_OTHER, TODAY.plusDays(2)));
             assertSuccess(manager.submitProposal(HELPER, REQUEST_R2, PROPOSAL_R2_HELPER, TODAY.plusDays(1)));
         }
 
-        private void createRequest(RequestId requestId, MemberId requester) {
-            assertSuccess(manager.createRequest(requester, requestId, GARDENING, 30, TODAY, TODAY.plusDays(3)));
+        private void createRequest(RequestId requestId, MemberId requester, int minutes) {
+            assertSuccess(manager.createRequest(requester, requestId, GARDENING, minutes, TODAY, TODAY.plusDays(3)));
         }
 
         private static void assertSuccess(Result<?> result) {

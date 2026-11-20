@@ -13,7 +13,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class RequestServiceIntegrationTest {
     @Test
     void onlyEligibleHelpersCanProposeAndRejectedAttemptsLeaveIdsAndBalancesIntact() {
-        RequestService service = InMemoryRegistrationService.create();
+        ProposalManagementService service = InMemoryRegistrationService.create();
         var gardening = new CategoryId("gardening");
         var date = LocalDate.of(2026, 9, 2);
         var requester = service.register("Pat", "pat@example.org").value().orElseThrow().id();
@@ -24,13 +24,19 @@ class RequestServiceIntegrationTest {
         var request = service.createRequest(requester, gardening, 45, date, date).value().orElseThrow();
         assertEquals("req-1", request.id().value());
         assertEquals(List.of(), service.matchingRequests(helper).value().orElseThrow());
-        assertTrue(service.submitProposal(helper, request.id(), date).isFailure());
+        assertEquals(FailureCode.BUSINESS_REJECTION,
+                service.submitProposal(helper, request.id(), date).failureCode().orElseThrow());
+        assertEquals(List.of(), service.proposalsForRequest(requester, request.id()).value().orElseThrow());
         service.offerSkill(requester, gardening).value().orElseThrow();
-        assertTrue(service.submitProposal(requester, request.id(), date).isFailure());
+        assertEquals(FailureCode.BUSINESS_REJECTION,
+                service.submitProposal(requester, request.id(), date).failureCode().orElseThrow());
+        assertEquals(List.of(), service.proposalsForRequest(requester, request.id()).value().orElseThrow());
         assertEquals(List.of(), service.matchingRequests(requester).value().orElseThrow());
         service.offerSkill(helper, gardening).value().orElseThrow();
         assertEquals(List.of(request), service.matchingRequests(helper).value().orElseThrow());
-        assertTrue(service.submitProposal(helper, request.id(), date.plusDays(1)).isFailure());
+        assertEquals(FailureCode.BUSINESS_REJECTION,
+                service.submitProposal(helper, request.id(), date.plusDays(1)).failureCode().orElseThrow());
+        assertEquals(List.of(), service.proposalsForRequest(requester, request.id()).value().orElseThrow());
         var proposal = service.submitProposal(helper, request.id(), date).value().orElseThrow();
         assertEquals("prop-1", proposal.id().value());
         assertEquals(request.id(), proposal.requestId());
